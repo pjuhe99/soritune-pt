@@ -12,7 +12,7 @@ function jsonSuccess(array $data, string $message = ''): void
 {
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
-        'success' => true,
+        'ok' => true,
         'message' => $message,
         'data'    => $data,
     ], JSON_UNESCAPED_UNICODE);
@@ -27,7 +27,7 @@ function jsonError(string $message, int $httpCode = 400): void
     http_response_code($httpCode);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
-        'success' => false,
+        'ok' => false,
         'message' => $message,
     ], JSON_UNESCAPED_UNICODE);
     exit;
