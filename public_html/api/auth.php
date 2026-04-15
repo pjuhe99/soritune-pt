@@ -18,19 +18,20 @@ switch ($action) {
             jsonError('필수 항목이 누락되었습니다', 400);
         }
 
+        $db = getDB();
         if ($role === 'admin') {
-            $stmt = $pdo->prepare('SELECT id, login_id, name, password, status FROM admins WHERE login_id = ?');
+            $stmt = $db->prepare('SELECT id, login_id, name, password_hash, status FROM admins WHERE login_id = ?');
             $stmt->execute([$login_id]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            $user = $stmt->fetch();
             $display_name = $user['name'] ?? '';
         } else {
-            $stmt = $pdo->prepare('SELECT id, login_id, coach_name AS display_name, password, status FROM coaches WHERE login_id = ?');
+            $stmt = $db->prepare('SELECT id, login_id, coach_name AS display_name, password_hash, status FROM coaches WHERE login_id = ?');
             $stmt->execute([$login_id]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            $user = $stmt->fetch();
             $display_name = $user['display_name'] ?? '';
         }
 
-        if (!$user || !password_verify($password, $user['password'])) {
+        if (!$user || !password_verify($password, $user['password_hash'])) {
             jsonError('아이디 또는 비밀번호가 올바르지 않습니다', 401);
         }
 
