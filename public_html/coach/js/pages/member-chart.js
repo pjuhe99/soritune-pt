@@ -21,7 +21,7 @@ CoachApp.registerPage('member-chart', {
 
   renderChart() {
     const m = this.member;
-    const coaches = m.current_coaches?.map(c => c.coach_name).join(', ') || '-';
+    const coaches = m.current_coaches?.map(c => UI.esc(c.coach_name)).join(', ') || '-';
 
     document.getElementById('pageContent').innerHTML = `
       <div style="margin-bottom:16px">
@@ -29,10 +29,10 @@ CoachApp.registerPage('member-chart', {
       </div>
 
       <div class="card card-elevated" style="margin-bottom:20px">
-        <h2 style="font-size:20px;font-weight:700;margin-bottom:16px">${m.name}</h2>
+        <h2 style="font-size:20px;font-weight:700;margin-bottom:16px">${UI.esc(m.name)}</h2>
         <div class="info-grid">
-          <div><div class="info-item-label">전화번호</div><div class="info-item-value">${m.phone||'-'}</div></div>
-          <div><div class="info-item-label">이메일</div><div class="info-item-value">${m.email||'-'}</div></div>
+          <div><div class="info-item-label">전화번호</div><div class="info-item-value">${UI.esc(m.phone)||'-'}</div></div>
+          <div><div class="info-item-label">이메일</div><div class="info-item-value">${UI.esc(m.email)||'-'}</div></div>
           <div><div class="info-item-label">상태</div><div class="info-item-value">${UI.statusBadge(m.display_status)}</div></div>
           <div><div class="info-item-label">담당 코치</div><div class="info-item-value">${coaches}</div></div>
         </div>
@@ -74,16 +74,16 @@ CoachApp.registerPage('member-chart', {
       const pct = Math.min(100, Math.round(((today-start)/(end-start))*100));
       const rem = Math.max(0, Math.ceil((end-today)/86400000));
       return `<div class="pt-progress-card">
-        <div class="pt-progress-header"><span class="pt-progress-title">${o.product_name} (기간형)</span><span class="pt-progress-coach">${o.coach_name||'-'}</span></div>
-        <div class="pt-progress-meta">${o.start_date} ~ ${o.end_date} | 남은 일수: ${rem}일</div>
+        <div class="pt-progress-header"><span class="pt-progress-title">${UI.esc(o.product_name)} (기간형)</span><span class="pt-progress-coach">${UI.esc(o.coach_name)||'-'}</span></div>
+        <div class="pt-progress-meta">${UI.esc(o.start_date)} ~ ${UI.esc(o.end_date)} | 남은 일수: ${rem}일</div>
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
       </div>`;
     }
     const used = parseInt(o.used_sessions)||0, total = parseInt(o.total_sessions)||1;
     const sessions = o.sessions||[];
     return `<div class="pt-progress-card">
-      <div class="pt-progress-header"><span class="pt-progress-title">${o.product_name} (횟수형)</span><span class="pt-progress-coach">${o.coach_name||'-'}</span></div>
-      <div class="pt-progress-meta">${o.start_date} ~ ${o.end_date} | ${used}/${total}회</div>
+      <div class="pt-progress-header"><span class="pt-progress-title">${UI.esc(o.product_name)} (횟수형)</span><span class="pt-progress-coach">${UI.esc(o.coach_name)||'-'}</span></div>
+      <div class="pt-progress-meta">${UI.esc(o.start_date)} ~ ${UI.esc(o.end_date)} | ${used}/${total}회</div>
       <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(used/total*100)}%"></div></div>
       <ul class="session-list">${sessions.map(s => `
         <li class="session-item">
@@ -108,8 +108,8 @@ CoachApp.registerPage('member-chart', {
     document.getElementById('tabContent').innerHTML = orders.length === 0
       ? '<div class="empty-state">PT 이력이 없습니다</div>'
       : `<table class="data-table"><thead><tr><th>상품명</th><th>유형</th><th>코치</th><th>기간</th><th>상태</th></tr></thead><tbody>
-          ${orders.map(o => `<tr><td>${o.product_name}</td><td>${o.product_type==='period'?'기간형':'횟수형'}</td><td>${o.coach_name||'-'}</td>
-          <td style="font-size:12px;color:var(--text-secondary)">${o.start_date}~${o.end_date}</td><td>${UI.statusBadge(o.status)}</td></tr>`).join('')}
+          ${orders.map(o => `<tr><td>${UI.esc(o.product_name)}</td><td>${o.product_type==='period'?'기간형':'횟수형'}</td><td>${UI.esc(o.coach_name)||'-'}</td>
+          <td style="font-size:12px;color:var(--text-secondary)">${UI.esc(o.start_date)}~${UI.esc(o.end_date)}</td><td>${UI.statusBadge(o.status)}</td></tr>`).join('')}
         </tbody></table>`;
   },
 
@@ -128,8 +128,8 @@ CoachApp.registerPage('member-chart', {
       ${notes.length === 0 ? '<div class="empty-state">메모가 없습니다</div>' : notes.map(n => `
         <div style="padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
           <span class="badge badge-${n.author_type==='admin'?'active':'진행예정'}">${n.author_type==='admin'?'관리자':'코치'}</span>
-          <span style="font-size:12px;color:var(--text-secondary);margin-left:8px">${n.author_name} | ${UI.formatDate(n.created_at)}</span>
-          <div style="margin-top:8px">${n.content}</div>
+          <span style="font-size:12px;color:var(--text-secondary);margin-left:8px">${UI.esc(n.author_name)} | ${UI.formatDate(n.created_at)}</span>
+          <div style="margin-top:8px">${UI.esc(n.content)}</div>
         </div>
       `).join('')}`;
     document.getElementById('noteForm')?.addEventListener('submit', async e => {
@@ -150,8 +150,8 @@ CoachApp.registerPage('member-chart', {
       : results.map(r => `
         <div class="card" style="margin-bottom:8px;padding:12px;background:var(--surface-card)">
           <span class="badge badge-${r.test_type==='disc'?'진행예정':'매칭대기'}">${r.test_type==='disc'?'DISC':'오감각'}</span>
-          <span style="font-size:12px;color:var(--text-secondary);margin-left:8px">${r.tested_at}</span>
-          <div style="margin-top:8px">${JSON.stringify(JSON.parse(r.result_data || '{}'))}</div>
+          <span style="font-size:12px;color:var(--text-secondary);margin-left:8px">${UI.esc(r.tested_at)}</span>
+          <div style="margin-top:8px">${UI.esc(JSON.stringify(JSON.parse(r.result_data || '{}')))}</div>
         </div>
       `).join('');
   },
@@ -164,8 +164,8 @@ CoachApp.registerPage('member-chart', {
     document.getElementById('tabContent').innerHTML = logs.length === 0
       ? '<div class="empty-state">변경 이력이 없습니다</div>'
       : `<table class="data-table"><thead><tr><th>일시</th><th>변경</th><th>변경자</th></tr></thead><tbody>
-          ${logs.map(l => `<tr><td style="font-size:11px;color:var(--text-secondary)">${l.created_at}</td>
-          <td style="font-size:12px">${l.action}</td><td style="font-size:12px">${l.actor_name||l.actor_type}</td></tr>`).join('')}
+          ${logs.map(l => `<tr><td style="font-size:11px;color:var(--text-secondary)">${UI.esc(l.created_at)}</td>
+          <td style="font-size:12px">${UI.esc(l.action)}</td><td style="font-size:12px">${UI.esc(l.actor_name||l.actor_type)}</td></tr>`).join('')}
         </tbody></table>`;
   },
 });

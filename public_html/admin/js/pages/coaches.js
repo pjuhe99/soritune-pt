@@ -40,12 +40,12 @@ App.registerPage('coaches', {
         <tbody>
           ${coaches.map(c => `
             <tr>
-              <td>${c.coach_name}</td>
+              <td>${UI.esc(c.coach_name)}</td>
               <td>${UI.statusBadge(c.status)}</td>
               <td>${c.available == 1 ? '<span style="color:var(--success)">가능</span>' : '<span style="color:var(--text-secondary)">불가</span>'}</td>
               <td>${c.current_count}</td>
               <td>${c.max_capacity}</td>
-              <td style="color:var(--text-secondary);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.memo || '-'}</td>
+              <td style="color:var(--text-secondary);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${UI.esc(c.memo) || '-'}</td>
               <td>
                 <button class="btn btn-small btn-secondary" onclick="App.pages.coaches.showForm(${c.id})">편집</button>
               </td>
@@ -69,7 +69,7 @@ App.registerPage('coaches', {
       <form id="coachForm">
         <div class="form-group">
           <label class="form-label">로그인 ID</label>
-          <input class="form-input" name="login_id" value="${coach.login_id}" ${isEdit ? 'readonly style="opacity:0.5"' : ''} required>
+          <input class="form-input" name="login_id" value="${UI.esc(coach.login_id)}" ${isEdit ? 'readonly style="opacity:0.5"' : ''} required>
         </div>
         <div class="form-group">
           <label class="form-label">${isEdit ? '비밀번호 (변경 시에만 입력)' : '비밀번호'}</label>
@@ -77,7 +77,7 @@ App.registerPage('coaches', {
         </div>
         <div class="form-group">
           <label class="form-label">코치명 (영문)</label>
-          <input class="form-input" name="coach_name" value="${coach.coach_name}" required>
+          <input class="form-input" name="coach_name" value="${UI.esc(coach.coach_name)}" required>
         </div>
         <div class="form-group">
           <label class="form-label">상태</label>
@@ -99,7 +99,7 @@ App.registerPage('coaches', {
         </div>
         <div class="form-group">
           <label class="form-label">메모</label>
-          <textarea class="form-textarea" name="memo">${coach.memo || ''}</textarea>
+          <textarea class="form-textarea" name="memo">${UI.esc(coach.memo)}</textarea>
         </div>
         <div class="modal-actions">
           ${isEdit ? `<button type="button" class="btn btn-danger btn-small" onclick="App.pages.coaches.deleteCoach(${coachId})">삭제</button>` : ''}

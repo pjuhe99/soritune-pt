@@ -35,6 +35,11 @@ const API = {
 };
 
 const UI = {
+  esc(str) {
+    const el = document.createElement('span');
+    el.textContent = str ?? '';
+    return el.innerHTML;
+  },
   statusBadge(s) { return `<span class="badge badge-${s}">${s}</span>`; },
   formatDate(d) { return d ? d.split(' ')[0] : '-'; },
   formatMoney(a) { return Number(a||0).toLocaleString() + '원'; },

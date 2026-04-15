@@ -20,8 +20,8 @@ CoachApp.registerPage('my-members', {
         <tbody>
           ${members.map(m => `
             <tr style="cursor:pointer" onclick="location.hash='member-chart/${m.id}'">
-              <td>${m.name}</td>
-              <td style="color:var(--text-secondary)">${m.phone || '-'}</td>
+              <td>${UI.esc(m.name)}</td>
+              <td style="color:var(--text-secondary)">${UI.esc(m.phone) || '-'}</td>
               <td>${UI.statusBadge(m.display_status)}</td>
               <td>${m.order_count}</td>
               <td><span style="color:var(--text-secondary)">→</span></td>

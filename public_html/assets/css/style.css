@@ -37,7 +37,11 @@
   /* Shadows */
   --shadow-elevated: rgba(0,0,0,0.5) 0px 8px 24px;
   --shadow-card:     rgba(0,0,0,0.3) 0px 8px 8px;
+  --shadow-medium:   rgba(0,0,0,0.4) 0px 4px 16px;
   --shadow-inset:    rgb(18,18,18) 0px 1px 0px, rgb(124,124,124) 0px 0px 0px 1px inset;
+
+  /* Surface variants */
+  --surface-card: #252525;
 
   /* Sidebar */
   --sidebar-width: 220px;
@@ -662,20 +666,12 @@ input, select, textarea {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(0,0,0,0.7);
+  background: rgba(0,0,0,0.7);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: var(--space-4);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-
-.modal-overlay.open {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .modal {
@@ -687,12 +683,6 @@ input, select, textarea {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: var(--shadow-elevated);
-  transform: translateY(8px);
-  transition: transform 0.2s;
-}
-
-.modal-overlay.open .modal {
-  transform: translateY(0);
 }
 
 .modal-header {
@@ -1225,4 +1215,87 @@ input, select, textarea {
 
 .sidebar-backdrop {
   display: none;
+}
+
+/* --------------------------------------------------------------------------
+   Additional utility classes (C3)
+   -------------------------------------------------------------------------- */
+.login-subtitle {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 28px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.card-elevated {
+  box-shadow: var(--shadow-medium);
+}
+
+.info-item-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.info-item-value {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.pt-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.pt-progress-title {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.pt-progress-coach {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.pt-progress-meta {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.session-date {
+  color: var(--text-secondary);
+  font-size: 12px;
 }

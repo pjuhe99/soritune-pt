@@ -14,6 +14,12 @@ switch ($action) {
         $targetId = (int)($_GET['target_id'] ?? 0);
         $memberId = (int)($_GET['member_id'] ?? 0);
 
+        if ($memberId && $user['role'] === 'coach') {
+            $stmt = $db->prepare("SELECT 1 FROM coach_assignments WHERE member_id = ? AND coach_id = ? AND released_at IS NULL");
+            $stmt->execute([$memberId, $user['id']]);
+            if (!$stmt->fetch()) jsonError('접근 권한이 없습니다', 403);
+        }
+
         if ($memberId) {
             // Get all logs related to a member (member + their orders + their assignments)
             $stmt = $db->prepare("

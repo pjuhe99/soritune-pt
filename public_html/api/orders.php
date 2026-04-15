@@ -48,6 +48,13 @@ switch ($action) {
         $order = $stmt->fetch();
         if (!$order) jsonError('주문을 찾을 수 없습니다', 404);
 
+        // Coach access check
+        if ($user['role'] === 'coach') {
+            $stmt = $db->prepare("SELECT 1 FROM coach_assignments WHERE member_id = ? AND coach_id = ? AND released_at IS NULL");
+            $stmt->execute([$order['member_id'], $user['id']]);
+            if (!$stmt->fetch()) jsonError('접근 권한이 없습니다', 403);
+        }
+
         // Load sessions for count type
         if ($order['product_type'] === 'count') {
             $stmt = $db->prepare("SELECT * FROM order_sessions WHERE order_id = ? ORDER BY session_number");

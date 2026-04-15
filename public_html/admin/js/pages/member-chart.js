@@ -22,8 +22,8 @@ App.registerPage('member-chart', {
 
   renderChart() {
     const m = this.member;
-    const coaches = m.current_coaches?.map(c => c.coach_name).join(', ') || '-';
-    const sorituneId = m.soritune_id || '-';
+    const coaches = m.current_coaches?.map(c => UI.esc(c.coach_name)).join(', ') || '-';
+    const sorituneId = UI.esc(m.soritune_id) || '-';
 
     document.getElementById('pageContent').innerHTML = `
       <div style="margin-bottom:16px">
@@ -33,15 +33,15 @@ App.registerPage('member-chart', {
       <div class="card card-elevated" style="margin-bottom:20px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
-            <h2 style="font-size:20px;font-weight:700;margin-bottom:16px">${m.name}</h2>
+            <h2 style="font-size:20px;font-weight:700;margin-bottom:16px">${UI.esc(m.name)}</h2>
             <div class="info-grid">
               <div>
                 <div class="info-item-label">전화번호</div>
-                <div class="info-item-value">${m.phone || '-'}</div>
+                <div class="info-item-value">${UI.esc(m.phone) || '-'}</div>
               </div>
               <div>
                 <div class="info-item-label">이메일</div>
-                <div class="info-item-value">${m.email || '-'}</div>
+                <div class="info-item-value">${UI.esc(m.email) || '-'}</div>
               </div>
               <div>
                 <div class="info-item-label">Soritune ID</div>
@@ -124,10 +124,10 @@ App.registerPage('member-chart', {
       return `
         <div class="pt-progress-card">
           <div class="pt-progress-header">
-            <span class="pt-progress-title">${order.product_name} (기간형)</span>
-            <span class="pt-progress-coach">${order.coach_name || '-'}</span>
+            <span class="pt-progress-title">${UI.esc(order.product_name)} (기간형)</span>
+            <span class="pt-progress-coach">${UI.esc(order.coach_name) || '-'}</span>
           </div>
-          <div class="pt-progress-meta">${order.start_date} ~ ${order.end_date} | 남은 일수: ${remaining}일</div>
+          <div class="pt-progress-meta">${UI.esc(order.start_date)} ~ ${UI.esc(order.end_date)} | 남은 일수: ${remaining}일</div>
           <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
           <div style="font-size:11px;color:var(--text-secondary);text-align:right">${pct}%</div>
         </div>
@@ -143,10 +143,10 @@ App.registerPage('member-chart', {
     return `
       <div class="pt-progress-card">
         <div class="pt-progress-header">
-          <span class="pt-progress-title">${order.product_name} (횟수형)</span>
-          <span class="pt-progress-coach">${order.coach_name || '-'}</span>
+          <span class="pt-progress-title">${UI.esc(order.product_name)} (횟수형)</span>
+          <span class="pt-progress-coach">${UI.esc(order.coach_name) || '-'}</span>
         </div>
-        <div class="pt-progress-meta">${order.start_date} ~ ${order.end_date} | ${used} / ${total}회</div>
+        <div class="pt-progress-meta">${UI.esc(order.start_date)} ~ ${UI.esc(order.end_date)} | ${used} / ${total}회</div>
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
         <ul class="session-list">
           ${sessions.map(s => `
@@ -192,10 +192,10 @@ App.registerPage('member-chart', {
           <tbody>
             ${orders.map(o => `
               <tr>
-                <td>${o.product_name}</td>
+                <td>${UI.esc(o.product_name)}</td>
                 <td>${o.product_type === 'period' ? '기간형' : '횟수형'}</td>
-                <td>${o.coach_name || '-'}</td>
-                <td style="font-size:12px;color:var(--text-secondary)">${o.start_date} ~ ${o.end_date}</td>
+                <td>${UI.esc(o.coach_name) || '-'}</td>
+                <td style="font-size:12px;color:var(--text-secondary)">${UI.esc(o.start_date)} ~ ${UI.esc(o.end_date)}</td>
                 <td>${o.product_type === 'count' ? `${o.used_sessions}/${o.total_sessions}` : '-'}</td>
                 <td>${UI.formatMoney(o.amount)}</td>
                 <td>${UI.statusBadge(o.status)}</td>
@@ -224,7 +224,7 @@ App.registerPage('member-chart', {
       <form id="orderForm">
         <div class="form-group">
           <label class="form-label">상품명</label>
-          <input class="form-input" name="product_name" value="${order.product_name}" required>
+          <input class="form-input" name="product_name" value="${UI.esc(order.product_name)}" required>
         </div>
         <div class="form-group">
           <label class="form-label">상품 유형</label>
@@ -270,7 +270,7 @@ App.registerPage('member-chart', {
         </div>
         <div class="form-group">
           <label class="form-label">메모</label>
-          <textarea class="form-textarea" name="memo">${order.memo||''}</textarea>
+          <textarea class="form-textarea" name="memo">${UI.esc(order.memo)}</textarea>
         </div>
         <div class="modal-actions">
           ${isEdit ? `<button type="button" class="btn btn-danger btn-small" onclick="App.pages['member-chart'].deleteOrder(${orderId})">삭제</button>` : ''}
@@ -331,7 +331,7 @@ App.registerPage('member-chart', {
       ${assignments.length === 0
         ? '<div style="color:var(--text-secondary);margin-bottom:20px">담당 코치 없음</div>'
         : `<div style="margin-bottom:20px">${assignments.map(a =>
-            `<span class="badge badge-active" style="margin-right:8px">${a.coach_name}</span>`
+            `<span class="badge badge-active" style="margin-right:8px">${UI.esc(a.coach_name)}</span>`
           ).join('')}</div>`
       }
       <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">변경 이력</h3>
@@ -344,8 +344,8 @@ App.registerPage('member-chart', {
               const newVal = JSON.parse(l.new_value || '{}');
               return `<tr>
                 <td style="font-size:12px;color:var(--text-secondary)">${UI.formatDate(l.created_at)}</td>
-                <td>${l.action === 'coach_assigned' ? '코치 배정' : '코치 변경'}: ${JSON.stringify(newVal)}</td>
-                <td style="font-size:12px">${l.actor_name || l.actor_type}</td>
+                <td>${l.action === 'coach_assigned' ? '코치 배정' : '코치 변경'}: ${UI.esc(JSON.stringify(newVal))}</td>
+                <td style="font-size:12px">${UI.esc(l.actor_name || l.actor_type)}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -372,9 +372,9 @@ App.registerPage('member-chart', {
           <div class="card" style="margin-bottom:8px;padding:12px;background:var(--surface-card)">
             <div style="display:flex;justify-content:space-between;align-items:center">
               <div>
-                <span style="font-size:12px;color:var(--text-secondary)">${r.tested_at}</span>
-                <div style="margin-top:4px">${this.formatTestData(r.result_data)}</div>
-                ${r.memo ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${r.memo}</div>` : ''}
+                <span style="font-size:12px;color:var(--text-secondary)">${UI.esc(r.tested_at)}</span>
+                <div style="margin-top:4px">${UI.esc(this.formatTestData(r.result_data))}</div>
+                ${r.memo ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${UI.esc(r.memo)}</div>` : ''}
               </div>
               <button class="btn btn-small btn-outline" onclick="App.pages['member-chart'].deleteTest(${r.id})">삭제</button>
             </div>
@@ -387,9 +387,9 @@ App.registerPage('member-chart', {
           <div class="card" style="margin-bottom:8px;padding:12px;background:var(--surface-card)">
             <div style="display:flex;justify-content:space-between;align-items:center">
               <div>
-                <span style="font-size:12px;color:var(--text-secondary)">${r.tested_at}</span>
-                <div style="margin-top:4px">${this.formatTestData(r.result_data)}</div>
-                ${r.memo ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${r.memo}</div>` : ''}
+                <span style="font-size:12px;color:var(--text-secondary)">${UI.esc(r.tested_at)}</span>
+                <div style="margin-top:4px">${UI.esc(this.formatTestData(r.result_data))}</div>
+                ${r.memo ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${UI.esc(r.memo)}</div>` : ''}
               </div>
               <button class="btn btn-small btn-outline" onclick="App.pages['member-chart'].deleteTest(${r.id})">삭제</button>
             </div>
@@ -473,11 +473,11 @@ App.registerPage('member-chart', {
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
             <div>
               <span class="badge badge-${n.author_type === 'admin' ? 'active' : '진행예정'}" style="margin-right:8px">${n.author_type === 'admin' ? '관리자' : '코치'}</span>
-              <span style="font-size:12px;color:var(--text-secondary)">${n.author_name} | ${UI.formatDate(n.created_at)}</span>
+              <span style="font-size:12px;color:var(--text-secondary)">${UI.esc(n.author_name)} | ${UI.formatDate(n.created_at)}</span>
             </div>
             <button class="btn btn-small btn-outline" onclick="App.pages['member-chart'].deleteNote(${n.id})">삭제</button>
           </div>
-          <div style="margin-top:8px;font-size:14px">${n.content}</div>
+          <div style="margin-top:8px;font-size:14px">${UI.esc(n.content)}</div>
         </div>
       `).join('')}
     `;
@@ -508,12 +508,12 @@ App.registerPage('member-chart', {
           <tbody>
             ${logs.map(l => `
               <tr>
-                <td style="font-size:11px;color:var(--text-secondary);white-space:nowrap">${l.created_at}</td>
-                <td style="font-size:12px">${l.target_type}</td>
-                <td style="font-size:12px">${l.action}</td>
-                <td style="font-size:11px;color:var(--text-secondary);max-width:150px;overflow:hidden;text-overflow:ellipsis">${l.old_value || '-'}</td>
-                <td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis">${l.new_value || '-'}</td>
-                <td style="font-size:12px">${l.actor_name || l.actor_type}</td>
+                <td style="font-size:11px;color:var(--text-secondary);white-space:nowrap">${UI.esc(l.created_at)}</td>
+                <td style="font-size:12px">${UI.esc(l.target_type)}</td>
+                <td style="font-size:12px">${UI.esc(l.action)}</td>
+                <td style="font-size:11px;color:var(--text-secondary);max-width:150px;overflow:hidden;text-overflow:ellipsis">${UI.esc(l.old_value) || '-'}</td>
+                <td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis">${UI.esc(l.new_value) || '-'}</td>
+                <td style="font-size:12px">${UI.esc(l.actor_name || l.actor_type)}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -537,11 +537,11 @@ App.registerPage('member-chart', {
           <tbody>
             ${accounts.map(a => `
               <tr>
-                <td>${a.source}</td>
-                <td style="color:var(--text-secondary)">${a.source_id || '-'}</td>
-                <td>${a.name || '-'}</td>
-                <td style="color:var(--text-secondary)">${a.phone || '-'}</td>
-                <td style="color:var(--text-secondary)">${a.email || '-'}</td>
+                <td>${UI.esc(a.source)}</td>
+                <td style="color:var(--text-secondary)">${UI.esc(a.source_id) || '-'}</td>
+                <td>${UI.esc(a.name) || '-'}</td>
+                <td style="color:var(--text-secondary)">${UI.esc(a.phone) || '-'}</td>
+                <td style="color:var(--text-secondary)">${UI.esc(a.email) || '-'}</td>
                 <td>${a.is_primary ? '<span style="color:var(--accent)">대표</span>' : ''}</td>
               </tr>
             `).join('')}
@@ -561,8 +561,8 @@ App.registerPage('member-chart', {
                 <tr>
                   <td style="font-size:12px;color:var(--text-secondary)">${UI.formatDate(h.merged_at)}</td>
                   <td>${h.primary_member_id == this.memberId ? '흡수' : '흡수됨'}</td>
-                  <td>${absorbed.name || '?'} (ID:${h.merged_member_id})</td>
-                  <td style="font-size:12px">${h.admin_name}</td>
+                  <td>${UI.esc(absorbed.name) || '?'} (ID:${h.merged_member_id})</td>
+                  <td style="font-size:12px">${UI.esc(h.admin_name)}</td>
                   <td>${isMerged ? UI.statusBadge('진행중') : '<span style="color:var(--text-secondary)">해제됨</span>'}</td>
                   <td>${isMerged && h.primary_member_id == this.memberId
                     ? `<button class="btn btn-small btn-outline" onclick="App.pages['member-chart'].undoMerge(${h.id})">해제</button>`
@@ -578,11 +578,11 @@ App.registerPage('member-chart', {
 
   async undoMerge(mergeLogId) {
     // First check for warnings
-    const check = await API.get(`/api/merge.php?action=undo&id=${mergeLogId}`);
+    const check = await API.post(`/api/merge.php?action=undo&id=${mergeLogId}`, {});
     if (check.ok && check.data.warning) {
       if (!UI.confirm(check.data.message + '\n\n계속하시겠습니까?')) return;
       // Force undo
-      const res = await API.get(`/api/merge.php?action=undo&id=${mergeLogId}&force=1`);
+      const res = await API.post(`/api/merge.php?action=undo&id=${mergeLogId}&force=1`, {});
       if (res.ok) { alert(res.message); await this.render([this.memberId]); }
       else alert(res.message);
     } else if (check.ok) {
@@ -600,19 +600,19 @@ App.registerPage('member-chart', {
       <form id="memberEditForm">
         <div class="form-group">
           <label class="form-label">이름</label>
-          <input class="form-input" name="name" value="${m.name}" required>
+          <input class="form-input" name="name" value="${UI.esc(m.name)}" required>
         </div>
         <div class="form-group">
           <label class="form-label">전화번호</label>
-          <input class="form-input" name="phone" value="${m.phone || ''}">
+          <input class="form-input" name="phone" value="${UI.esc(m.phone)}">
         </div>
         <div class="form-group">
           <label class="form-label">이메일</label>
-          <input class="form-input" name="email" value="${m.email || ''}" type="email">
+          <input class="form-input" name="email" value="${UI.esc(m.email)}" type="email">
         </div>
         <div class="form-group">
           <label class="form-label">메모</label>
-          <textarea class="form-textarea" name="memo">${m.memo || ''}</textarea>
+          <textarea class="form-textarea" name="memo">${UI.esc(m.memo)}</textarea>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-danger btn-small" onclick="App.pages['member-chart'].deleteMember()">회원 삭제</button>

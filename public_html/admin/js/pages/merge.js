@@ -31,8 +31,8 @@ App.registerPage('merge', {
             <label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer">
               <input type="checkbox" name="member_ids" value="${m.id}" checked>
               <input type="radio" name="primary_id" value="${m.id}">
-              <span>${m.name}</span>
-              <span style="color:var(--text-secondary);font-size:12px">${m.phone || '-'} | ${m.email || '-'}</span>
+              <span>${UI.esc(m.name)}</span>
+              <span style="color:var(--text-secondary);font-size:12px">${UI.esc(m.phone) || '-'} | ${UI.esc(m.email) || '-'}</span>
               <span style="font-size:11px;color:var(--text-secondary)">ID:${m.id}</span>
             </label>
           `).join('')}

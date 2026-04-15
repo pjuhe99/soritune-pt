@@ -75,6 +75,12 @@ const API = {
 const UI = {
   $(id) { return document.getElementById(id); },
 
+  esc(str) {
+    const el = document.createElement('span');
+    el.textContent = str ?? '';
+    return el.innerHTML;
+  },
+
   statusBadge(status) {
     return `<span class="badge badge-${status}">${status}</span>`;
   },
