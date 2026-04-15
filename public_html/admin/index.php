@@ -1,0 +1,86 @@
+<?php
+require_once __DIR__ . '/../includes/auth.php';
+$user = getCurrentUser();
+$isLoggedIn = $user && $user['role'] === 'admin';
+?>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SoriTune PT — Admin</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+
+<?php if (!$isLoggedIn): ?>
+<div class="login-wrapper">
+  <div class="login-card">
+    <div class="login-logo">SoriTune PT</div>
+    <div class="login-subtitle">관리자 로그인</div>
+    <div class="login-error" id="loginError"></div>
+    <form id="loginForm">
+      <div class="form-group">
+        <input type="text" class="form-input" id="loginId" placeholder="아이디" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <input type="password" class="form-input" id="loginPw" placeholder="비밀번호" autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">LOGIN</button>
+    </form>
+  </div>
+</div>
+<script>
+document.getElementById('loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const err = document.getElementById('loginError');
+  err.style.display = 'none';
+  const res = await fetch('/api/auth.php?action=login', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      login_id: document.getElementById('loginId').value,
+      password: document.getElementById('loginPw').value,
+      role: 'admin'
+    })
+  });
+  const data = await res.json();
+  if (data.ok) { location.reload(); }
+  else { err.textContent = data.message; err.style.display = 'block'; }
+});
+</script>
+
+<?php else: ?>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">SoriTune PT</div>
+    <nav class="sidebar-nav">
+      <a href="#members" data-page="members">회원관리</a>
+      <a href="#coaches" data-page="coaches">코치관리</a>
+      <a href="#merge" data-page="merge">동일인관리</a>
+      <a href="#import" data-page="import">데이터관리</a>
+    </nav>
+  </aside>
+  <main class="main-content">
+    <div class="topbar">
+      <div></div>
+      <div class="topbar-user">
+        <span><?= htmlspecialchars($user['name']) ?></span>
+        <button class="btn btn-small btn-outline" onclick="logout()">LOGOUT</button>
+      </div>
+    </div>
+    <div id="pageContent"></div>
+  </main>
+</div>
+
+<script src="/admin/js/app.js"></script>
+<script src="/admin/js/pages/coaches.js"></script>
+<script src="/admin/js/pages/members.js"></script>
+<script src="/admin/js/pages/member-chart.js"></script>
+<script src="/admin/js/pages/merge.js"></script>
+<script src="/admin/js/pages/import.js"></script>
+<script>App.init();</script>
+<?php endif; ?>
+
+</body>
+</html>
