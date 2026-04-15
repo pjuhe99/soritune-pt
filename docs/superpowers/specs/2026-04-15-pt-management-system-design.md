@@ -97,15 +97,16 @@ public_html/
 
 ### members
 
+members는 회원차트의 표시 기준(authority)이다. 관리자가 이름/전화/이메일을 수정하면 이 테이블만 업데이트한다.
+status는 저장하지 않고, 주문 상태로부터 조회 시 자동 산정한다 (아래 Member Status Auto-Calculation 참조).
+현재 담당 코치도 저장하지 않고, coach_assignments(released_at IS NULL) 기준으로 조회한다.
+
 | Column | Type | Description |
 |--------|------|-------------|
 | id | INT AUTO_INCREMENT PK | |
 | name | VARCHAR(100) | 이름 |
 | phone | VARCHAR(20) | 휴대폰 |
 | email | VARCHAR(255) | 이메일 |
-| soritune_id | VARCHAR(100) | soritunenglish.com ID |
-| current_coach_id | INT FK -> coaches.id NULL | 현재 담당 코치 |
-| status | ENUM('매칭대기','진행예정','진행중','연기','중단','환불','종료') DEFAULT '매칭대기' | 대표 상태 |
 | memo | TEXT | 특이사항 |
 | merged_into | INT FK -> members.id NULL | 병합된 경우 대표 회원 ID |
 | created_at | DATETIME | |
@@ -113,15 +114,19 @@ public_html/
 
 ### member_accounts
 
+member_accounts는 원본 데이터 보관용이다. 각 출처(soritune, import 등)에서 가져온 원본 정보를 그대로 보존한다.
+members 테이블의 정보를 수정해도 member_accounts는 변경하지 않는다 (원본 추적 목적).
+soritune_id는 이 테이블의 source='soritune', source_id 컬럼으로 관리한다.
+
 | Column | Type | Description |
 |--------|------|-------------|
 | id | INT AUTO_INCREMENT PK | |
 | member_id | INT FK -> members.id | 소속 회원 |
 | source | VARCHAR(50) | 출처 ('soritune', 'manual', 'import') |
-| source_id | VARCHAR(100) | 해당 출처에서의 ID |
-| name | VARCHAR(100) | 해당 계정의 이름 |
-| phone | VARCHAR(20) | 해당 계정의 전화번호 |
-| email | VARCHAR(255) | 해당 계정의 이메일 |
+| source_id | VARCHAR(100) | 해당 출처에서의 ID (soritune_id 등) |
+| name | VARCHAR(100) | 해당 계정의 원본 이름 |
+| phone | VARCHAR(20) | 해당 계정의 원본 전화번호 |
+| email | VARCHAR(255) | 해당 계정의 원본 이메일 |
 | is_primary | TINYINT(1) DEFAULT 0 | 대표 계정 여부 |
 | created_at | DATETIME | |
 
@@ -137,7 +142,6 @@ public_html/
 | start_date | DATE | 시작일 |
 | end_date | DATE | 종료일 |
 | total_sessions | INT NULL | 총 횟수 (횟수형) |
-| used_sessions | INT DEFAULT 0 | 소진 횟수 (횟수형) |
 | amount | INT DEFAULT 0 | 금액 |
 | status | ENUM('매칭대기','매칭완료','진행중','연기','중단','환불','종료') DEFAULT '매칭대기' | |
 | memo | TEXT | |
@@ -156,7 +160,8 @@ public_html/
 | created_at | DATETIME | |
 
 - 횟수형 주문 생성 시 total_sessions 만큼 행을 미리 생성
-- 완료 체크 시 completed_at 기록 + orders.used_sessions 자동 증가
+- 완료 체크 시 completed_at 기록
+- used_sessions는 저장하지 않음. 조회 시 COUNT(completed_at IS NOT NULL)로 파생 계산
 
 ### coach_assignments
 
@@ -200,7 +205,8 @@ public_html/
 | id | INT AUTO_INCREMENT PK | |
 | primary_member_id | INT | 대표 회원 |
 | merged_member_id | INT | 흡수된 회원 |
-| snapshot | JSON | 병합 전 데이터 스냅샷 |
+| absorbed_member_data | JSON | 흡수 회원의 원본 정보 (이름, 전화, 이메일 등) |
+| moved_records | JSON | 테이블별 이동된 레코드 ID 목록 |
 | admin_id | INT FK -> admins.id | 실행한 관리자 |
 | merged_at | DATETIME | |
 | unmerged_at | DATETIME NULL | 병합 해제 시 |
@@ -237,24 +243,77 @@ public_html/
 
 ## Member Status Auto-Calculation
 
-회원의 `status`는 주문 상태가 변경될 때마다 재계산한다.
+members 테이블에 status 컬럼은 없다. 회원 대표 상태는 조회 시 해당 회원의 모든 주문 상태로부터 파생 계산한다.
+관리자가 회원 상태를 바꾸려면, 개별 주문의 상태를 변경해야 한다. 회원 레벨의 직접 상태 변경은 불가.
 
 ### Priority (highest first)
 
-| Rank | Order Status | -> Member Status |
-|------|-------------|-----------------|
-| 1 | 진행중 | 진행중 |
-| 2 | 매칭완료 | 진행예정 |
-| 3 | 매칭대기 | 매칭대기 |
-| 4 | 연기 | 연기 |
-| 5 | 중단 | 중단 |
-| 6 | 환불 | 환불 |
-| 7 | 종료 | 종료 |
+주문 상태(orders.status)에서 회원 대표 상태로의 매핑.
+주문 상태와 회원 대표 상태의 용어가 다른 경우 주석으로 표시.
 
-### current_coach_id Auto-Update
+| Rank | Order Status | -> Member Display Status | Note |
+|------|-------------|-------------------------|------|
+| 1 | 진행중 | 진행중 | |
+| 2 | 매칭완료 | 진행예정 | 주문은 코치 배정 완료, 회원 기준으로는 "곧 시작" |
+| 3 | 매칭대기 | 매칭대기 | |
+| 4 | 연기 | 연기 | |
+| 5 | 중단 | 중단 | |
+| 6 | 환불 | 환불 | |
+| 7 | 종료 | 종료 | |
 
-- 진행중 주문이 있으면 -> 해당 주문의 coach_id (여러 개면 가장 최근 시작일)
-- 진행중 주문이 없으면 -> NULL
+- 주문이 없는 회원 -> "매칭대기"로 표시
+
+### 계산 SQL 예시
+
+```sql
+SELECT m.*,
+  COALESCE(
+    (SELECT CASE o.status
+       WHEN '진행중' THEN '진행중'
+       WHEN '매칭완료' THEN '진행예정'
+       ELSE o.status
+     END
+     FROM orders o
+     WHERE o.member_id = m.id
+     ORDER BY FIELD(o.status, '진행중','매칭완료','매칭대기','연기','중단','환불','종료')
+     LIMIT 1),
+    '매칭대기'
+  ) AS display_status
+FROM members m
+```
+
+### 현재 담당 코치 판정
+
+members 테이블에 current_coach_id 컬럼은 없다. 현재 담당 코치는 coach_assignments 테이블에서 파생한다.
+
+- 조건: coach_assignments WHERE member_id = ? AND released_at IS NULL
+- 여러 건이면 모두 현재 담당 (여러 PT를 다른 코치에게 받는 경우)
+- 회원 목록/차트에서 표시 시 JOIN으로 가져옴
+
+### 코치의 접근 권한 판정
+
+코치가 접근 가능한 회원 = coach_assignments WHERE coach_id = ? AND released_at IS NULL
+
+- 매칭완료(아직 시작 전)인 주문의 코치도 접근 가능
+- released_at이 채워지면 즉시 접근 불가
+
+---
+
+## Coach Data Sync Rules
+
+코치 관련 데이터가 3곳에 존재하므로 역할을 명확히 구분한다.
+
+| 필드 | 역할 | 동기화 |
+|------|------|--------|
+| orders.coach_id | 주문별 담당 코치. **진실 원천** | 관리자가 주문 생성/수정 시 직접 설정 |
+| coach_assignments | 코치 배정 이력 + 현재 담당 판정 | 주문에 코치를 배정/변경할 때 자동으로 기록 생성 (이전 배정은 released_at 채움) |
+
+### 주문에 코치 배정 시 자동 처리
+
+1. orders.coach_id 설정
+2. coach_assignments에 신규 행 INSERT (assigned_at = NOW)
+3. 같은 order_id로 released_at IS NULL인 기존 배정이 있으면 -> released_at = NOW, reason 기록
+4. change_logs에 코치 변경 기록
 
 ---
 
@@ -284,8 +343,29 @@ public_html/
 | member_accounts | member_id -> primary |
 | members (absorbed) | merged_into = primary ID, 목록에서 숨김 |
 
-- merge_logs에 병합 전 스냅샷(JSON) 저장
-- 병합 해제 시 snapshot 기반 복원 + unmerged_at 기록
+### merge_logs 저장 방식
+
+snapshot(JSON) 대신, **이동된 레코드 ID 목록**을 테이블별로 저장한다.
+
+```json
+{
+  "absorbed_member": { "id": 5, "name": "소리김", "phone": "010-...", "email": "..." },
+  "moved_records": {
+    "orders": [10, 11],
+    "coach_assignments": [7],
+    "test_results": [],
+    "member_notes": [3, 4],
+    "member_accounts": [8]
+  }
+}
+```
+
+### 병합 해제
+
+- merge_logs.moved_records를 기반으로 각 레코드의 member_id를 원래 회원으로 복원
+- 병합 이후 대표 회원에 추가된 신규 데이터(병합 시점 이후 created_at)가 있으면, 해제 전 경고 표시: "병합 후 추가된 데이터 N건이 있습니다. 이 데이터는 대표 회원에 유지됩니다."
+- 해제 시: moved_records에 기록된 레코드만 원래 회원으로 이동. 병합 후 신규 데이터는 건드리지 않음
+- merged_into를 NULL로 복원, merge_logs.unmerged_at 기록
 
 ---
 
@@ -316,8 +396,23 @@ Phase 5: 동일인 검토 및 수동 병합
 - 원본 시트를 서버에 보관 (uploads/imports/)
 - 매 import마다 고유 batch_id 발급
 - 모든 행을 migration_logs에 기록 (success/skipped/error)
-- 중복 방지: 같은 batch_id 재실행 불가
 - 매칭 실패 건은 별도 화면에서 수동 매칭
+
+### 중복 방지 (Upsert 기준)
+
+같은 파일을 다른 batch_id로 재업로드해도 중복 데이터가 생기지 않도록 자연키 기준을 정의한다.
+
+**회원 import:**
+- 자연키: soritune_id (있으면 우선) 또는 (이름 + 전화번호 정규화)
+- 자연키가 일치하는 기존 회원이 있으면 -> 새로 생성하지 않고 기존 회원에 member_accounts 추가
+- 일치하는 회원이 없으면 -> 신규 생성
+
+**주문 import:**
+- 자연키: (member_id + 상품명 + 시작일)
+- 자연키가 일치하는 기존 주문이 있으면 -> 스킵 (migration_logs에 'skipped: duplicate' 기록)
+- 일치하는 주문이 없으면 -> 신규 생성
+
+**전화번호 정규화:** import 전 하이픈 제거, 공백 제거, 010 prefix 보정 후 비교
 
 ### Exception Handling
 
@@ -347,8 +442,8 @@ Spotify-inspired dark theme. Sidebar + main content.
 **2. 회원관리 - 회원차트 (상세)**
 
 상단 고정:
-- 기본 정보 (이름, 전화, 이메일, soritune_id, 대표상태, 담당코치)
-- 정보수정 / 상태변경 버튼
+- 기본 정보 (이름, 전화, 이메일, 연결 계정의 soritune_id, 대표상태(자동산정), 현재 담당코치(coach_assignments 기반))
+- 정보수정 버튼 (이름/전화/이메일/메모만 수정 가능. 대표 상태는 주문 상태에서 자동 산정되므로 직접 변경 불가)
 
 진행 중인 PT 섹션:
 - 기간형: 시작~종료 기간, 남은 일수, 진행률 프로그레스바
@@ -381,7 +476,8 @@ Spotify-inspired dark theme. Sidebar + main content.
 
 ### Scope
 
-현재 담당 중인 회원만 접근 가능. 담당 종료/코치 변경 후 접근 불가.
+coach_assignments WHERE coach_id = 본인 AND released_at IS NULL 기준으로 접근 가능한 회원 결정.
+매칭완료(시작 전)~진행중 모두 포함. released_at이 채워지면 즉시 접근 불가.
 
 ### Pages
 
