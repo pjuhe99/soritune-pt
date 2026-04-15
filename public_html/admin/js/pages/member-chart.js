@@ -521,7 +521,76 @@ App.registerPage('member-chart', {
   },
 
   async loadMergeInfo() {
-    document.getElementById('tabContent').innerHTML = '<div class="empty-state">Task 7에서 구현</div>';
+    const [historyRes, memberRes] = await Promise.all([
+      API.get(`/api/merge.php?action=history&member_id=${this.memberId}`),
+      API.get(`/api/members.php?action=get&id=${this.memberId}`),
+    ]);
+
+    const history = historyRes.ok ? historyRes.data.history : [];
+    const accounts = memberRes.ok ? memberRes.data.member.accounts : [];
+
+    document.getElementById('tabContent').innerHTML = `
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">연결 계정</h3>
+      ${accounts.length === 0 ? '<div style="color:var(--text-secondary);margin-bottom:20px">연결 계정 없음</div>' : `
+        <table class="data-table" style="margin-bottom:24px">
+          <thead><tr><th>출처</th><th>ID</th><th>이름</th><th>전화</th><th>이메일</th><th>대표</th></tr></thead>
+          <tbody>
+            ${accounts.map(a => `
+              <tr>
+                <td>${a.source}</td>
+                <td style="color:var(--text-secondary)">${a.source_id || '-'}</td>
+                <td>${a.name || '-'}</td>
+                <td style="color:var(--text-secondary)">${a.phone || '-'}</td>
+                <td style="color:var(--text-secondary)">${a.email || '-'}</td>
+                <td>${a.is_primary ? '<span style="color:var(--accent)">대표</span>' : ''}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `}
+
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">병합 이력</h3>
+      ${history.length === 0 ? '<div class="empty-state">병합 이력이 없습니다</div>' : `
+        <table class="data-table">
+          <thead><tr><th>일시</th><th>유형</th><th>대상</th><th>관리자</th><th>상태</th><th></th></tr></thead>
+          <tbody>
+            ${history.map(h => {
+              const absorbed = JSON.parse(h.absorbed_member_data || '{}');
+              const isMerged = !h.unmerged_at;
+              return `
+                <tr>
+                  <td style="font-size:12px;color:var(--text-secondary)">${UI.formatDate(h.merged_at)}</td>
+                  <td>${h.primary_member_id == this.memberId ? '흡수' : '흡수됨'}</td>
+                  <td>${absorbed.name || '?'} (ID:${h.merged_member_id})</td>
+                  <td style="font-size:12px">${h.admin_name}</td>
+                  <td>${isMerged ? UI.statusBadge('진행중') : '<span style="color:var(--text-secondary)">해제됨</span>'}</td>
+                  <td>${isMerged && h.primary_member_id == this.memberId
+                    ? `<button class="btn btn-small btn-outline" onclick="App.pages['member-chart'].undoMerge(${h.id})">해제</button>`
+                    : ''}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `}
+    `;
+  },
+
+  async undoMerge(mergeLogId) {
+    // First check for warnings
+    const check = await API.get(`/api/merge.php?action=undo&id=${mergeLogId}`);
+    if (check.ok && check.data.warning) {
+      if (!UI.confirm(check.data.message + '\n\n계속하시겠습니까?')) return;
+      // Force undo
+      const res = await API.get(`/api/merge.php?action=undo&id=${mergeLogId}&force=1`);
+      if (res.ok) { alert(res.message); await this.render([this.memberId]); }
+      else alert(res.message);
+    } else if (check.ok) {
+      alert(check.message);
+      await this.render([this.memberId]);
+    } else {
+      alert(check.message);
+    }
   },
 
   async showEditForm() {
