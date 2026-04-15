@@ -313,19 +313,211 @@ App.registerPage('member-chart', {
   },
 
   async loadCoachHistory() {
-    document.getElementById('tabContent').innerHTML = '<div class="empty-state">Task 6에서 구현</div>';
+    const res = await API.get(`/api/orders.php?action=list&member_id=${this.memberId}`);
+    if (!res.ok) return;
+
+    // Build coach history from orders + assignments perspective
+    const stmt = await API.get(`/api/members.php?action=get&id=${this.memberId}`);
+    const assignments = stmt.ok ? stmt.data.member.current_coaches : [];
+
+    // Get all coach assignments via logs
+    const logRes = await API.get(`/api/logs.php?action=list&member_id=${this.memberId}`);
+    const coachLogs = logRes.ok
+      ? logRes.data.logs.filter(l => l.action === 'coach_assigned' || l.action === 'coach_change')
+      : [];
+
+    document.getElementById('tabContent').innerHTML = `
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">현재 담당 코치</h3>
+      ${assignments.length === 0
+        ? '<div style="color:var(--text-secondary);margin-bottom:20px">담당 코치 없음</div>'
+        : `<div style="margin-bottom:20px">${assignments.map(a =>
+            `<span class="badge badge-active" style="margin-right:8px">${a.coach_name}</span>`
+          ).join('')}</div>`
+      }
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">변경 이력</h3>
+      ${coachLogs.length === 0 ? '<div class="empty-state">코치 변경 이력이 없습니다</div>' : `
+        <table class="data-table">
+          <thead><tr><th>일시</th><th>변경 내용</th><th>변경자</th></tr></thead>
+          <tbody>
+            ${coachLogs.map(l => {
+              const oldVal = JSON.parse(l.old_value || '{}');
+              const newVal = JSON.parse(l.new_value || '{}');
+              return `<tr>
+                <td style="font-size:12px;color:var(--text-secondary)">${UI.formatDate(l.created_at)}</td>
+                <td>${l.action === 'coach_assigned' ? '코치 배정' : '코치 변경'}: ${JSON.stringify(newVal)}</td>
+                <td style="font-size:12px">${l.actor_name || l.actor_type}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      `}
+    `;
   },
 
   async loadTests() {
-    document.getElementById('tabContent').innerHTML = '<div class="empty-state">Task 6에서 구현</div>';
+    const res = await API.get(`/api/tests.php?action=list&member_id=${this.memberId}`);
+    if (!res.ok) return;
+    const results = res.data.results;
+
+    const discResults = results.filter(r => r.test_type === 'disc');
+    const sensoryResults = results.filter(r => r.test_type === 'sensory');
+
+    document.getElementById('tabContent').innerHTML = `
+      <div style="margin-bottom:12px;text-align:right">
+        <button class="btn btn-small btn-primary" onclick="App.pages['member-chart'].showTestForm()">+ 결과 추가</button>
+      </div>
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">DISC 진단</h3>
+      ${discResults.length === 0 ? '<div style="color:var(--text-secondary);margin-bottom:20px">결과 없음</div>' :
+        discResults.map(r => `
+          <div class="card" style="margin-bottom:8px;padding:12px;background:var(--surface-card)">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <span style="font-size:12px;color:var(--text-secondary)">${r.tested_at}</span>
+                <div style="margin-top:4px">${this.formatTestData(r.result_data)}</div>
+                ${r.memo ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${r.memo}</div>` : ''}
+              </div>
+              <button class="btn btn-small btn-outline" onclick="App.pages['member-chart'].deleteTest(${r.id})">삭제</button>
+            </div>
+          </div>
+        `).join('')
+      }
+      <h3 style="font-size:14px;font-weight:700;margin:20px 0 12px">오감각 테스트</h3>
+      ${sensoryResults.length === 0 ? '<div style="color:var(--text-secondary)">결과 없음</div>' :
+        sensoryResults.map(r => `
+          <div class="card" style="margin-bottom:8px;padding:12px;background:var(--surface-card)">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <span style="font-size:12px;color:var(--text-secondary)">${r.tested_at}</span>
+                <div style="margin-top:4px">${this.formatTestData(r.result_data)}</div>
+                ${r.memo ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${r.memo}</div>` : ''}
+              </div>
+              <button class="btn btn-small btn-outline" onclick="App.pages['member-chart'].deleteTest(${r.id})">삭제</button>
+            </div>
+          </div>
+        `).join('')
+      }
+    `;
+  },
+
+  formatTestData(data) {
+    try {
+      const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+      if (Array.isArray(parsed)) return parsed.join(', ');
+      if (typeof parsed === 'object') {
+        return Object.entries(parsed).map(([k,v]) => `${k}: ${v}`).join(' | ');
+      }
+      return String(parsed);
+    } catch { return String(data || '-'); }
+  },
+
+  async showTestForm() {
+    UI.showModal(`
+      <div class="modal-title">테스트 결과 추가</div>
+      <form id="testForm">
+        <div class="form-group">
+          <label class="form-label">테스트 유형</label>
+          <select class="form-select" name="test_type" required>
+            <option value="disc">DISC 진단</option>
+            <option value="sensory">오감각 테스트</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">테스트 일자</label>
+          <input class="form-input" type="date" name="tested_at" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">결과 (JSON 또는 텍스트)</label>
+          <textarea class="form-textarea" name="result_data" placeholder='예: {"D":35,"I":25,"S":20,"C":20}'></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">메모</label>
+          <textarea class="form-textarea" name="memo"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="UI.closeModal()">취소</button>
+          <button type="submit" class="btn btn-primary">저장</button>
+        </div>
+      </form>
+    `);
+
+    document.getElementById('testForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const fd = Object.fromEntries(new FormData(e.target));
+      fd.member_id = this.memberId;
+      try { fd.result_data = JSON.parse(fd.result_data); } catch { fd.result_data = fd.result_data; }
+      const res = await API.post('/api/tests.php?action=create', fd);
+      if (res.ok) { UI.closeModal(); this.switchTab('tests'); } else { alert(res.message); }
+    });
+  },
+
+  async deleteTest(id) {
+    if (!UI.confirm('이 테스트 결과를 삭제하시겠습니까?')) return;
+    const res = await API.post(`/api/tests.php?action=delete&id=${id}`);
+    if (res.ok) this.switchTab('tests'); else alert(res.message);
   },
 
   async loadNotes() {
-    document.getElementById('tabContent').innerHTML = '<div class="empty-state">Task 6에서 구현</div>';
+    const res = await API.get(`/api/notes.php?action=list&member_id=${this.memberId}`);
+    if (!res.ok) return;
+    const notes = res.data.notes;
+
+    document.getElementById('tabContent').innerHTML = `
+      <div style="margin-bottom:16px">
+        <form id="noteForm" style="display:flex;gap:10px">
+          <input class="form-input" name="content" placeholder="메모를 입력하세요" style="flex:1" required>
+          <button type="submit" class="btn btn-primary btn-small">추가</button>
+        </form>
+      </div>
+      ${notes.length === 0 ? '<div class="empty-state">메모가 없습니다</div>' : notes.map(n => `
+        <div style="padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <span class="badge badge-${n.author_type === 'admin' ? 'active' : '진행예정'}" style="margin-right:8px">${n.author_type === 'admin' ? '관리자' : '코치'}</span>
+              <span style="font-size:12px;color:var(--text-secondary)">${n.author_name} | ${UI.formatDate(n.created_at)}</span>
+            </div>
+            <button class="btn btn-small btn-outline" onclick="App.pages['member-chart'].deleteNote(${n.id})">삭제</button>
+          </div>
+          <div style="margin-top:8px;font-size:14px">${n.content}</div>
+        </div>
+      `).join('')}
+    `;
+
+    document.getElementById('noteForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const content = new FormData(e.target).get('content');
+      const res = await API.post('/api/notes.php?action=create', { member_id: this.memberId, content });
+      if (res.ok) this.switchTab('notes'); else alert(res.message);
+    });
+  },
+
+  async deleteNote(id) {
+    if (!UI.confirm('이 메모를 삭제하시겠습니까?')) return;
+    const res = await API.post(`/api/notes.php?action=delete&id=${id}`);
+    if (res.ok) this.switchTab('notes'); else alert(res.message);
   },
 
   async loadLogs() {
-    document.getElementById('tabContent').innerHTML = '<div class="empty-state">Task 6에서 구현</div>';
+    const res = await API.get(`/api/logs.php?action=list&member_id=${this.memberId}`);
+    if (!res.ok) return;
+    const logs = res.data.logs;
+
+    document.getElementById('tabContent').innerHTML = logs.length === 0
+      ? '<div class="empty-state">변경 이력이 없습니다</div>'
+      : `<table class="data-table">
+          <thead><tr><th>일시</th><th>대상</th><th>변경</th><th>이전</th><th>이후</th><th>변경자</th></tr></thead>
+          <tbody>
+            ${logs.map(l => `
+              <tr>
+                <td style="font-size:11px;color:var(--text-secondary);white-space:nowrap">${l.created_at}</td>
+                <td style="font-size:12px">${l.target_type}</td>
+                <td style="font-size:12px">${l.action}</td>
+                <td style="font-size:11px;color:var(--text-secondary);max-width:150px;overflow:hidden;text-overflow:ellipsis">${l.old_value || '-'}</td>
+                <td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis">${l.new_value || '-'}</td>
+                <td style="font-size:12px">${l.actor_name || l.actor_type}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>`;
   },
 
   async loadMergeInfo() {
