@@ -1,1 +1,387 @@
-// Member chart detail — implemented in Task 4-6
+/**
+ * Member Chart (Detail) Page
+ */
+App.registerPage('member-chart', {
+  memberId: null,
+  member: null,
+
+  async render(params) {
+    this.memberId = parseInt(params[0]);
+    if (!this.memberId) { location.hash = 'members'; return; }
+
+    document.getElementById('pageContent').innerHTML = '<div class="loading">불러오는 중...</div>';
+
+    const res = await API.get(`/api/members.php?action=get&id=${this.memberId}`);
+    if (!res.ok) {
+      document.getElementById('pageContent').innerHTML = `<div class="empty-state">${res.message}</div>`;
+      return;
+    }
+    this.member = res.data.member;
+    this.renderChart();
+  },
+
+  renderChart() {
+    const m = this.member;
+    const coaches = m.current_coaches?.map(c => c.coach_name).join(', ') || '-';
+    const sorituneId = m.soritune_id || '-';
+
+    document.getElementById('pageContent').innerHTML = `
+      <div style="margin-bottom:16px">
+        <a href="#members" style="color:var(--text-secondary);text-decoration:none;font-size:13px">← 회원목록</a>
+      </div>
+
+      <div class="card card-elevated" style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <h2 style="font-size:20px;font-weight:700;margin-bottom:16px">${m.name}</h2>
+            <div class="info-grid">
+              <div>
+                <div class="info-item-label">전화번호</div>
+                <div class="info-item-value">${m.phone || '-'}</div>
+              </div>
+              <div>
+                <div class="info-item-label">이메일</div>
+                <div class="info-item-value">${m.email || '-'}</div>
+              </div>
+              <div>
+                <div class="info-item-label">Soritune ID</div>
+                <div class="info-item-value">${sorituneId}</div>
+              </div>
+              <div>
+                <div class="info-item-label">대표 상태</div>
+                <div class="info-item-value">${UI.statusBadge(m.display_status)}</div>
+              </div>
+              <div>
+                <div class="info-item-label">담당 코치</div>
+                <div class="info-item-value">${coaches}</div>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-small btn-secondary" onclick="App.pages['member-chart'].showEditForm()">정보수정</button>
+        </div>
+      </div>
+
+      <div id="ptProgressSection"></div>
+
+      <div class="tabs" id="chartTabs">
+        <button class="tab-btn active" data-tab="orders" onclick="App.pages['member-chart'].switchTab('orders')">PT이력</button>
+        <button class="tab-btn" data-tab="coach-history" onclick="App.pages['member-chart'].switchTab('coach-history')">코치이력</button>
+        <button class="tab-btn" data-tab="tests" onclick="App.pages['member-chart'].switchTab('tests')">테스트결과</button>
+        <button class="tab-btn" data-tab="notes" onclick="App.pages['member-chart'].switchTab('notes')">메모</button>
+        <button class="tab-btn" data-tab="logs" onclick="App.pages['member-chart'].switchTab('logs')">변경로그</button>
+        <button class="tab-btn" data-tab="merge-info" onclick="App.pages['member-chart'].switchTab('merge-info')">병합정보</button>
+      </div>
+      <div id="tabContent"><div class="empty-state">PT이력 탭 — Task 5에서 구현</div></div>
+    `;
+
+    // Load PT progress section
+    this.loadPtProgress();
+    this.switchTab('orders');
+  },
+
+  switchTab(tabName) {
+    document.querySelectorAll('#chartTabs .tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tabName);
+    });
+    const loaders = {
+      'orders': () => this.loadOrders(),
+      'coach-history': () => this.loadCoachHistory(),
+      'tests': () => this.loadTests(),
+      'notes': () => this.loadNotes(),
+      'logs': () => this.loadLogs(),
+      'merge-info': () => this.loadMergeInfo(),
+    };
+    if (loaders[tabName]) loaders[tabName]();
+  },
+
+  async loadPtProgress() {
+    const res = await API.get(`/api/orders.php?action=active&member_id=${this.memberId}`);
+    if (!res.ok || res.data.orders.length === 0) {
+      document.getElementById('ptProgressSection').innerHTML = '';
+      return;
+    }
+
+    const orders = res.data.orders;
+    document.getElementById('ptProgressSection').innerHTML = `
+      <div class="card" style="margin-bottom:20px;background:var(--surface-card)">
+        <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">진행 중인 PT</h3>
+        ${orders.map(o => this.renderPtProgressCard(o)).join('')}
+      </div>
+    `;
+  },
+
+  renderPtProgressCard(order) {
+    const today = new Date();
+    const start = new Date(order.start_date);
+    const end = new Date(order.end_date);
+
+    if (order.product_type === 'period') {
+      const totalDays = Math.max(1, (end - start) / 86400000);
+      const elapsed = Math.max(0, (today - start) / 86400000);
+      const pct = Math.min(100, Math.round((elapsed / totalDays) * 100));
+      const remaining = Math.max(0, Math.ceil((end - today) / 86400000));
+
+      return `
+        <div class="pt-progress-card">
+          <div class="pt-progress-header">
+            <span class="pt-progress-title">${order.product_name} (기간형)</span>
+            <span class="pt-progress-coach">${order.coach_name || '-'}</span>
+          </div>
+          <div class="pt-progress-meta">${order.start_date} ~ ${order.end_date} | 남은 일수: ${remaining}일</div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+          <div style="font-size:11px;color:var(--text-secondary);text-align:right">${pct}%</div>
+        </div>
+      `;
+    }
+
+    // Count type
+    const used = parseInt(order.used_sessions) || 0;
+    const total = parseInt(order.total_sessions) || 1;
+    const pct = Math.round((used / total) * 100);
+    const sessions = order.sessions || [];
+
+    return `
+      <div class="pt-progress-card">
+        <div class="pt-progress-header">
+          <span class="pt-progress-title">${order.product_name} (횟수형)</span>
+          <span class="pt-progress-coach">${order.coach_name || '-'}</span>
+        </div>
+        <div class="pt-progress-meta">${order.start_date} ~ ${order.end_date} | ${used} / ${total}회</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <ul class="session-list">
+          ${sessions.map(s => `
+            <li class="session-item">
+              <button class="session-check ${s.completed_at ? 'done' : ''}"
+                onclick="App.pages['member-chart'].toggleSession(${s.id}, event)">
+                ${s.completed_at ? '&#10003;' : ''}
+              </button>
+              <span>${s.session_number}회차</span>
+              <span class="session-date">${s.completed_at ? UI.formatDate(s.completed_at) + ' 완료' : '-'}</span>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    `;
+  },
+
+  async toggleSession(sessionId, event) {
+    const res = await API.post(`/api/orders.php?action=complete_session&session_id=${sessionId}`);
+    if (res.ok) {
+      await this.render([this.memberId]); // Reload full chart
+    } else {
+      alert(res.message);
+    }
+  },
+
+  async loadOrders() {
+    const res = await API.get(`/api/orders.php?action=list&member_id=${this.memberId}`);
+    if (!res.ok) return;
+    const orders = res.data.orders;
+
+    const isAdmin = true; // Admin page always admin context
+
+    document.getElementById('tabContent').innerHTML = `
+      ${isAdmin ? `<div style="margin-bottom:12px;text-align:right">
+        <button class="btn btn-small btn-primary" onclick="App.pages['member-chart'].showOrderForm()">+ PT이력 추가</button>
+      </div>` : ''}
+      ${orders.length === 0 ? '<div class="empty-state">PT 이력이 없습니다</div>' : `
+        <table class="data-table">
+          <thead><tr>
+            <th>상품명</th><th>유형</th><th>코치</th><th>기간</th><th>진행</th><th>금액</th><th>상태</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${orders.map(o => `
+              <tr>
+                <td>${o.product_name}</td>
+                <td>${o.product_type === 'period' ? '기간형' : '횟수형'}</td>
+                <td>${o.coach_name || '-'}</td>
+                <td style="font-size:12px;color:var(--text-secondary)">${o.start_date} ~ ${o.end_date}</td>
+                <td>${o.product_type === 'count' ? `${o.used_sessions}/${o.total_sessions}` : '-'}</td>
+                <td>${UI.formatMoney(o.amount)}</td>
+                <td>${UI.statusBadge(o.status)}</td>
+                <td>${isAdmin ? `<button class="btn btn-small btn-secondary" onclick="App.pages['member-chart'].showOrderForm(${o.id})">편집</button>` : ''}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `}
+    `;
+  },
+
+  async showOrderForm(orderId = null) {
+    let order = { product_name:'', product_type:'period', start_date:'', end_date:'', total_sessions:'', amount:0, status:'매칭대기', coach_id:'', memo:'' };
+    if (orderId) {
+      const res = await API.get(`/api/orders.php?action=get&id=${orderId}`);
+      if (res.ok) order = res.data.order;
+    }
+
+    const coachRes = await API.get('/api/coaches.php?action=list');
+    const coaches = coachRes.ok ? coachRes.data.coaches.filter(c => c.status === 'active') : [];
+    const isEdit = !!orderId;
+
+    UI.showModal(`
+      <div class="modal-title">${isEdit ? 'PT이력 수정' : 'PT이력 추가'}</div>
+      <form id="orderForm">
+        <div class="form-group">
+          <label class="form-label">상품명</label>
+          <input class="form-input" name="product_name" value="${order.product_name}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">상품 유형</label>
+          <select class="form-select" name="product_type" onchange="document.getElementById('sessionFields').style.display=this.value==='count'?'block':'none'">
+            <option value="period" ${order.product_type==='period'?'selected':''}>기간형</option>
+            <option value="count" ${order.product_type==='count'?'selected':''}>횟수형</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">담당 코치</label>
+          <select class="form-select" name="coach_id">
+            <option value="">미배정</option>
+            ${coaches.map(c => `<option value="${c.id}" ${order.coach_id==c.id?'selected':''}>${c.coach_name}</option>`).join('')}
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label class="form-label">시작일</label>
+            <input class="form-input" type="date" name="start_date" value="${order.start_date}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">종료일</label>
+            <input class="form-input" type="date" name="end_date" value="${order.end_date}" required>
+          </div>
+        </div>
+        <div id="sessionFields" style="display:${order.product_type==='count'?'block':'none'}">
+          <div class="form-group">
+            <label class="form-label">총 횟수</label>
+            <input class="form-input" type="number" name="total_sessions" value="${order.total_sessions||''}" min="1">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">금액</label>
+          <input class="form-input" type="number" name="amount" value="${order.amount||0}" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">상태</label>
+          <select class="form-select" name="status">
+            ${['매칭대기','매칭완료','진행중','연기','중단','환불','종료'].map(s =>
+              `<option value="${s}" ${order.status===s?'selected':''}>${s}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">메모</label>
+          <textarea class="form-textarea" name="memo">${order.memo||''}</textarea>
+        </div>
+        <div class="modal-actions">
+          ${isEdit ? `<button type="button" class="btn btn-danger btn-small" onclick="App.pages['member-chart'].deleteOrder(${orderId})">삭제</button>` : ''}
+          <button type="button" class="btn btn-secondary" onclick="UI.closeModal()">취소</button>
+          <button type="submit" class="btn btn-primary">${isEdit ? '저장' : '추가'}</button>
+        </div>
+      </form>
+    `);
+
+    document.getElementById('orderForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(e.target));
+      body.member_id = this.memberId;
+      body.amount = parseInt(body.amount) || 0;
+      body.total_sessions = parseInt(body.total_sessions) || null;
+      body.coach_id = parseInt(body.coach_id) || null;
+
+      const url = isEdit
+        ? `/api/orders.php?action=update&id=${orderId}`
+        : '/api/orders.php?action=create';
+      const res = await API.post(url, body);
+      if (res.ok) {
+        UI.closeModal();
+        await this.render([this.memberId]);
+      } else {
+        alert(res.message);
+      }
+    });
+  },
+
+  async deleteOrder(id) {
+    if (!UI.confirm('이 PT이력을 삭제하시겠습니까?')) return;
+    const res = await API.post(`/api/orders.php?action=delete&id=${id}`);
+    if (res.ok) {
+      UI.closeModal();
+      await this.render([this.memberId]);
+    } else {
+      alert(res.message);
+    }
+  },
+
+  async loadCoachHistory() {
+    document.getElementById('tabContent').innerHTML = '<div class="empty-state">Task 6에서 구현</div>';
+  },
+
+  async loadTests() {
+    document.getElementById('tabContent').innerHTML = '<div class="empty-state">Task 6에서 구현</div>';
+  },
+
+  async loadNotes() {
+    document.getElementById('tabContent').innerHTML = '<div class="empty-state">Task 6에서 구현</div>';
+  },
+
+  async loadLogs() {
+    document.getElementById('tabContent').innerHTML = '<div class="empty-state">Task 6에서 구현</div>';
+  },
+
+  async loadMergeInfo() {
+    document.getElementById('tabContent').innerHTML = '<div class="empty-state">Task 7에서 구현</div>';
+  },
+
+  async showEditForm() {
+    const m = this.member;
+    UI.showModal(`
+      <div class="modal-title">회원 정보 수정</div>
+      <form id="memberEditForm">
+        <div class="form-group">
+          <label class="form-label">이름</label>
+          <input class="form-input" name="name" value="${m.name}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">전화번호</label>
+          <input class="form-input" name="phone" value="${m.phone || ''}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">이메일</label>
+          <input class="form-input" name="email" value="${m.email || ''}" type="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">메모</label>
+          <textarea class="form-textarea" name="memo">${m.memo || ''}</textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-danger btn-small" onclick="App.pages['member-chart'].deleteMember()">회원 삭제</button>
+          <button type="button" class="btn btn-secondary" onclick="UI.closeModal()">취소</button>
+          <button type="submit" class="btn btn-primary">저장</button>
+        </div>
+      </form>
+    `);
+
+    document.getElementById('memberEditForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(e.target));
+      const res = await API.post(`/api/members.php?action=update&id=${this.memberId}`, body);
+      if (res.ok) {
+        UI.closeModal();
+        await this.render([this.memberId]);
+      } else {
+        alert(res.message);
+      }
+    });
+  },
+
+  async deleteMember() {
+    if (!UI.confirm('이 회원을 삭제하시겠습니까? 모든 이력이 삭제됩니다.')) return;
+    const res = await API.post(`/api/members.php?action=delete&id=${this.memberId}`);
+    if (res.ok) {
+      UI.closeModal();
+      location.hash = 'members';
+    } else {
+      alert(res.message);
+    }
+  },
+});
