@@ -12,7 +12,7 @@ App.registerPage('members', {
         <button class="btn btn-primary" onclick="App.pages.members.showCreateForm()">+ 회원 추가</button>
       </div>
       <div class="filters">
-        <input class="search-input" id="memberSearch" placeholder="이름, 전화번호, 이메일 검색" oninput="App.pages.members.search()">
+        <input class="search-input" id="memberSearch" placeholder="Soritune ID, 이름, 전화번호, 이메일 검색" oninput="App.pages.members.search()">
         <select class="filter-pill" id="statusFilter" onchange="App.pages.members.search()">
           <option value="">전체 상태</option>
           <option value="진행중">진행중</option>
@@ -63,6 +63,7 @@ App.registerPage('members', {
       <table class="data-table">
         <thead>
           <tr>
+            <th>Soritune ID</th>
             <th>이름</th>
             <th>전화번호</th>
             <th>담당코치</th>
@@ -74,6 +75,7 @@ App.registerPage('members', {
         <tbody>
           ${members.map(m => `
             <tr style="cursor:pointer" onclick="location.hash='member-chart/${m.id}'">
+              <td style="font-family:monospace;font-size:13px">${UI.esc(m.soritune_id)}</td>
               <td>${UI.esc(m.name)}</td>
               <td style="color:var(--text-secondary)">${UI.esc(m.phone) || '-'}</td>
               <td>${UI.esc(m.current_coaches) || '-'}</td>
@@ -92,7 +94,11 @@ App.registerPage('members', {
       <div class="modal-title">회원 추가</div>
       <form id="memberCreateForm">
         <div class="form-group">
-          <label class="form-label">이름</label>
+          <label class="form-label">Soritune ID <span style="color:var(--accent)">*</span></label>
+          <input class="form-input" name="soritune_id" placeholder="soritunenglish.com 회원 ID" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">이름 <span style="color:var(--accent)">*</span></label>
           <input class="form-input" name="name" required>
         </div>
         <div class="form-group">
@@ -102,10 +108,6 @@ App.registerPage('members', {
         <div class="form-group">
           <label class="form-label">이메일</label>
           <input class="form-input" name="email" type="email">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Soritune ID</label>
-          <input class="form-input" name="soritune_id" placeholder="soritunenglish.com ID">
         </div>
         <div class="form-group">
           <label class="form-label">메모</label>

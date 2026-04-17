@@ -83,7 +83,14 @@ switch ($action) {
             }
             $row = array_combine($headers, array_map('trim', $raw));
 
+            $sorituneId = $row['soritune_id'] ?? $row['Soritune ID'] ?? '';
             $name = $row['이름'] ?? $row['name'] ?? '';
+            if (!$sorituneId) {
+                $db->prepare("INSERT INTO migration_logs (batch_id, source_type, source_row, status, message)
+                    VALUES (?, 'spreadsheet', ?, 'error', ?)")->execute([$batchId, $rowNum, 'soritune_id 누락']);
+                $stats['error']++;
+                continue;
+            }
             if (!$name) {
                 $db->prepare("INSERT INTO migration_logs (batch_id, source_type, source_row, status, message)
                     VALUES (?, 'spreadsheet', ?, 'error', ?)")->execute([$batchId, $rowNum, '이름 누락']);
@@ -93,49 +100,25 @@ switch ($action) {
 
             $phone = normalizePhone($row['전화번호'] ?? $row['phone'] ?? null);
             $email = $row['이메일'] ?? $row['email'] ?? null;
-            $sorituneId = $row['soritune_id'] ?? $row['Soritune ID'] ?? '';
             $memo = $row['메모'] ?? $row['memo'] ?? '';
 
-            // Check for existing member (natural key: soritune_id or name+phone)
-            $existingId = null;
-            if ($sorituneId) {
-                $stmt = $db->prepare("SELECT ma.member_id FROM member_accounts ma WHERE ma.source = 'soritune' AND ma.source_id = ?");
-                $stmt->execute([$sorituneId]);
-                $existingId = $stmt->fetchColumn() ?: null;
-            }
-            if (!$existingId && $phone && $name) {
-                $stmt = $db->prepare("SELECT id FROM members WHERE name = ? AND phone = ? AND merged_into IS NULL");
-                $stmt->execute([$name, $phone]);
-                $existingId = $stmt->fetchColumn() ?: null;
-            }
+            // Dedup by soritune_id (unique key on members)
+            $stmt = $db->prepare("SELECT id FROM members WHERE soritune_id = ?");
+            $stmt->execute([$sorituneId]);
+            $existingId = $stmt->fetchColumn() ?: null;
 
             if ($existingId) {
-                // Add account to existing member
-                $db->prepare("INSERT INTO member_accounts (member_id, source, source_id, name, phone, email)
-                    VALUES (?, 'import', ?, ?, ?, ?)")->execute([$existingId, $sorituneId ?: null, $name, $phone, $email]);
                 $db->prepare("INSERT INTO migration_logs (batch_id, source_type, source_row, target_table, target_id, status, message)
-                    VALUES (?, 'spreadsheet', ?, 'member_accounts', ?, 'success', ?)")
-                    ->execute([$batchId, $rowNum, (int)$db->lastInsertId(), '기존 회원에 계정 추가']);
-                $stats['success']++;
+                    VALUES (?, 'spreadsheet', ?, 'members', ?, 'skipped', ?)")
+                    ->execute([$batchId, $rowNum, $existingId, '중복 soritune_id']);
+                $stats['skipped']++;
                 continue;
             }
 
             // Create new member
-            $db->prepare("INSERT INTO members (name, phone, email, memo) VALUES (?, ?, ?, ?)")
-                ->execute([$name, $phone, $email ?: null, $memo ?: null]);
+            $db->prepare("INSERT INTO members (soritune_id, name, phone, email, memo) VALUES (?, ?, ?, ?, ?)")
+                ->execute([$sorituneId, $name, $phone, $email ?: null, $memo ?: null]);
             $memberId = (int)$db->lastInsertId();
-
-            // Primary account
-            $db->prepare("INSERT INTO member_accounts (member_id, source, source_id, name, phone, email, is_primary)
-                VALUES (?, 'import', ?, ?, ?, ?, 1)")
-                ->execute([$memberId, $sorituneId ?: null, $name, $phone, $email]);
-
-            // Soritune account if ID provided
-            if ($sorituneId) {
-                $db->prepare("INSERT INTO member_accounts (member_id, source, source_id, name, phone, email)
-                    VALUES (?, 'soritune', ?, ?, ?, ?)")
-                    ->execute([$memberId, $sorituneId, $name, $phone, $email]);
-            }
 
             $db->prepare("INSERT INTO migration_logs (batch_id, source_type, source_row, target_table, target_id, status, message)
                 VALUES (?, 'spreadsheet', ?, 'members', ?, 'success', ?)")
@@ -179,33 +162,24 @@ switch ($action) {
             }
             $row = array_combine($headers, array_map('trim', $raw));
 
-            $memberName = $row['회원이름'] ?? $row['member_name'] ?? '';
-            $memberPhone = normalizePhone($row['전화번호'] ?? $row['phone'] ?? null);
+            $sorituneId = $row['soritune_id'] ?? $row['Soritune ID'] ?? '';
             $productName = $row['상품명'] ?? $row['product_name'] ?? '';
             $startDate = $row['시작일'] ?? $row['start_date'] ?? '';
 
-            if (!$memberName || !$productName || !$startDate) {
+            if (!$sorituneId || !$productName || !$startDate) {
                 $db->prepare("INSERT INTO migration_logs (batch_id, source_type, source_row, status, message)
-                    VALUES (?, 'spreadsheet', ?, 'error', ?)")->execute([$batchId, $rowNum, '필수 필드 누락']);
+                    VALUES (?, 'spreadsheet', ?, 'error', ?)")->execute([$batchId, $rowNum, '필수 필드 누락 (soritune_id, 상품명, 시작일)']);
                 $stats['error']++;
                 continue;
             }
 
-            // Match member
-            $memberId = null;
-            if ($memberPhone) {
-                $stmt = $db->prepare("SELECT id FROM members WHERE phone = ? AND merged_into IS NULL LIMIT 1");
-                $stmt->execute([$memberPhone]);
-                $memberId = $stmt->fetchColumn() ?: null;
-            }
-            if (!$memberId) {
-                $stmt = $db->prepare("SELECT id FROM members WHERE name = ? AND merged_into IS NULL LIMIT 1");
-                $stmt->execute([$memberName]);
-                $memberId = $stmt->fetchColumn() ?: null;
-            }
+            // Match member by soritune_id
+            $stmt = $db->prepare("SELECT id FROM members WHERE soritune_id = ? AND merged_into IS NULL LIMIT 1");
+            $stmt->execute([$sorituneId]);
+            $memberId = $stmt->fetchColumn() ?: null;
             if (!$memberId) {
                 $db->prepare("INSERT INTO migration_logs (batch_id, source_type, source_row, status, message)
-                    VALUES (?, 'spreadsheet', ?, 'error', ?)")->execute([$batchId, $rowNum, "회원 매칭 실패: {$memberName}"]);
+                    VALUES (?, 'spreadsheet', ?, 'error', ?)")->execute([$batchId, $rowNum, "회원 매칭 실패: soritune_id={$sorituneId}"]);
                 $stats['error']++;
                 continue;
             }

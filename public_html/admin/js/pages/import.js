@@ -6,14 +6,14 @@ App.registerPage('import', {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px">
         <div class="card">
           <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">회원 Import</h3>
-          <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">CSV/TSV 파일. 컬럼: 이름, 전화번호, 이메일, soritune_id, 메모</p>
+          <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">CSV/TSV. 필수: soritune_id, 이름 / 선택: 전화번호, 이메일, 메모</p>
           <input type="file" id="memberFile" accept=".csv,.tsv,.txt" style="display:none" onchange="App.pages.import.uploadFile('members')">
           <button class="btn btn-primary btn-small" onclick="document.getElementById('memberFile').click()">파일 선택</button>
           <div id="memberUploadResult"></div>
         </div>
         <div class="card">
           <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">PT이력 Import</h3>
-          <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">CSV/TSV 파일. 컬럼: 회원이름, 전화번호, 상품명, 상품유형(기간/횟수), 코치명(영문), 시작일, 종료일, 총횟수, 소진횟수, 금액, 상태, 메모</p>
+          <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">CSV/TSV. 필수: soritune_id, 상품명, 시작일 / 선택: 상품유형, 코치명(영문), 종료일, 총횟수, 소진횟수, 금액, 상태, 메모</p>
           <input type="file" id="orderFile" accept=".csv,.tsv,.txt" style="display:none" onchange="App.pages.import.uploadFile('orders')">
           <button class="btn btn-primary btn-small" onclick="document.getElementById('orderFile').click()">파일 선택</button>
           <div id="orderUploadResult"></div>

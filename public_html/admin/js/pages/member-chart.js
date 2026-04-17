@@ -599,7 +599,11 @@ App.registerPage('member-chart', {
       <div class="modal-title">회원 정보 수정</div>
       <form id="memberEditForm">
         <div class="form-group">
-          <label class="form-label">이름</label>
+          <label class="form-label">Soritune ID <span style="color:var(--accent)">*</span></label>
+          <input class="form-input" name="soritune_id" value="${UI.esc(m.soritune_id)}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">이름 <span style="color:var(--accent)">*</span></label>
           <input class="form-input" name="name" value="${UI.esc(m.name)}" required>
         </div>
         <div class="form-group">

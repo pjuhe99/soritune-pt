@@ -27,9 +27,9 @@ switch ($action) {
         }
 
         if ($search !== '') {
-            $where[] = "(m.name LIKE ? OR m.phone LIKE ? OR m.email LIKE ?)";
+            $where[] = "(m.name LIKE ? OR m.phone LIKE ? OR m.email LIKE ? OR m.soritune_id LIKE ?)";
             $like = "%{$search}%";
-            $params = array_merge($params, [$like, $like, $like]);
+            $params = array_merge($params, [$like, $like, $like, $like]);
         }
 
         $havingClauses = [];
@@ -53,9 +53,7 @@ switch ($action) {
                FROM coach_assignments ca
                JOIN coaches c ON c.id = ca.coach_id
                WHERE ca.member_id = m.id AND ca.released_at IS NULL) AS current_coaches,
-              (SELECT COUNT(*) FROM orders o WHERE o.member_id = m.id) AS order_count,
-              (SELECT ma.source_id FROM member_accounts ma
-               WHERE ma.member_id = m.id AND ma.source = 'soritune' LIMIT 1) AS soritune_id
+              (SELECT COUNT(*) FROM orders o WHERE o.member_id = m.id) AS order_count
             FROM members m
             WHERE {$whereSQL}
             {$havingSQL}
@@ -80,8 +78,7 @@ switch ($action) {
         $statusSQL = memberStatusSQL();
         $stmt = $db->prepare("
             SELECT m.*,
-              {$statusSQL} AS display_status,
-              (SELECT ma.source_id FROM member_accounts ma WHERE ma.member_id = m.id AND ma.source = 'soritune' LIMIT 1) AS soritune_id
+              {$statusSQL} AS display_status
             FROM members m WHERE m.id = ?
         ");
         $stmt->execute([$id]);
@@ -108,31 +105,23 @@ switch ($action) {
     case 'create':
         if ($user['role'] !== 'admin') jsonError('권한이 없습니다', 403);
         $input = getJsonInput();
+        $sorituneId = trim($input['soritune_id'] ?? '');
         $name = trim($input['name'] ?? '');
+        if (!$sorituneId) jsonError('Soritune ID를 입력하세요');
         if (!$name) jsonError('이름을 입력하세요');
 
         $phone = normalizePhone($input['phone'] ?? null);
         $email = trim($input['email'] ?? '') ?: null;
 
-        $db->beginTransaction();
-        $stmt = $db->prepare("INSERT INTO members (name, phone, email, memo) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$name, $phone, $email, $input['memo'] ?? null]);
+        try {
+            $stmt = $db->prepare("INSERT INTO members (soritune_id, name, phone, email, memo) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$sorituneId, $name, $phone, $email, $input['memo'] ?? null]);
+        } catch (PDOException $e) {
+            if ($e->getCode() == 23000) jsonError('이미 사용 중인 Soritune ID입니다');
+            throw $e;
+        }
         $memberId = (int)$db->lastInsertId();
 
-        // Create primary account
-        $stmt = $db->prepare("INSERT INTO member_accounts (member_id, source, source_id, name, phone, email, is_primary)
-            VALUES (?, 'manual', NULL, ?, ?, ?, 1)");
-        $stmt->execute([$memberId, $name, $phone, $email]);
-
-        // If soritune_id provided, add soritune account
-        $sorituneId = trim($input['soritune_id'] ?? '');
-        if ($sorituneId) {
-            $stmt = $db->prepare("INSERT INTO member_accounts (member_id, source, source_id, name, phone, email, is_primary)
-                VALUES (?, 'soritune', ?, ?, ?, ?, 0)");
-            $stmt->execute([$memberId, $sorituneId, $name, $phone, $email]);
-        }
-
-        $db->commit();
         jsonSuccess(['id' => $memberId], '회원이 등록되었습니다');
 
     case 'update':
@@ -143,7 +132,16 @@ switch ($action) {
 
         $fields = [];
         $params = [];
-        if (array_key_exists('name', $input)) { $fields[] = 'name = ?'; $params[] = trim($input['name']); }
+        if (array_key_exists('soritune_id', $input)) {
+            $sid = trim($input['soritune_id']);
+            if (!$sid) jsonError('Soritune ID는 비울 수 없습니다');
+            $fields[] = 'soritune_id = ?'; $params[] = $sid;
+        }
+        if (array_key_exists('name', $input)) {
+            $nm = trim($input['name']);
+            if (!$nm) jsonError('이름은 비울 수 없습니다');
+            $fields[] = 'name = ?'; $params[] = $nm;
+        }
         if (array_key_exists('phone', $input)) { $fields[] = 'phone = ?'; $params[] = normalizePhone($input['phone']); }
         if (array_key_exists('email', $input)) { $fields[] = 'email = ?'; $params[] = trim($input['email']) ?: null; }
         if (array_key_exists('memo', $input)) { $fields[] = 'memo = ?'; $params[] = $input['memo']; }
@@ -152,13 +150,18 @@ switch ($action) {
         $params[] = $id;
 
         // Log change
-        $stmt = $db->prepare("SELECT name, phone, email, memo FROM members WHERE id = ?");
+        $stmt = $db->prepare("SELECT soritune_id, name, phone, email, memo FROM members WHERE id = ?");
         $stmt->execute([$id]);
         $oldData = $stmt->fetch();
 
-        $db->prepare("UPDATE members SET " . implode(', ', $fields) . " WHERE id = ?")->execute($params);
+        try {
+            $db->prepare("UPDATE members SET " . implode(', ', $fields) . " WHERE id = ?")->execute($params);
+        } catch (PDOException $e) {
+            if ($e->getCode() == 23000) jsonError('이미 사용 중인 Soritune ID입니다');
+            throw $e;
+        }
 
-        $stmt = $db->prepare("SELECT name, phone, email, memo FROM members WHERE id = ?");
+        $stmt = $db->prepare("SELECT soritune_id, name, phone, email, memo FROM members WHERE id = ?");
         $stmt->execute([$id]);
         $newData = $stmt->fetch();
 
