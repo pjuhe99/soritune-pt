@@ -88,10 +88,19 @@ public_html/
 | login_id | VARCHAR(50) UNIQUE | 로그인 ID |
 | password_hash | VARCHAR(255) | bcrypt |
 | coach_name | VARCHAR(100) | 영문 이름 |
+| korean_name | VARCHAR(50) NULL | 한글 이름 |
+| birthdate | DATE NULL | 생년월일 |
+| hired_on | DATE NULL | 입사일 |
+| role | ENUM('신규 코치','일반 코치','리드 코치','코칭 마스터 코치','소리 마스터 코치') NULL | 직급 |
+| evaluation | ENUM('pass','fail') NULL | 평가 결과 |
 | status | ENUM('active','inactive') | 활동중/비활성 |
 | available | TINYINT(1) DEFAULT 1 | 배정 가능 여부 |
 | max_capacity | INT DEFAULT 0 | 최대 담당 인원 |
 | memo | TEXT | |
+| overseas | TINYINT(1) DEFAULT 0 | 해외 거주/근무 여부 |
+| side_job | TINYINT(1) DEFAULT 0 | 부업 여부 |
+| soriblock_basic | TINYINT(1) DEFAULT 0 | 소리블럭 기본 가능 |
+| soriblock_advanced | TINYINT(1) DEFAULT 0 | 소리블럭 심화 가능 |
 | created_at | DATETIME | |
 | updated_at | DATETIME | |
 

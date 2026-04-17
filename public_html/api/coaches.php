@@ -38,15 +38,26 @@ switch ($action) {
         if (!$loginId || !$password || !$coachName) jsonError('필수 항목을 입력하세요');
 
         $hash = password_hash($password, PASSWORD_BCRYPT);
-        $stmt = $db->prepare("INSERT INTO coaches (login_id, password_hash, coach_name, status, available, max_capacity, memo)
-            VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt = $db->prepare("INSERT INTO coaches
+            (login_id, password_hash, coach_name, korean_name, birthdate, hired_on, role, evaluation,
+             status, available, max_capacity, memo, overseas, side_job, soriblock_basic, soriblock_advanced)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         try {
             $stmt->execute([
                 $loginId, $hash, $coachName,
+                trim($input['korean_name'] ?? '') ?: null,
+                !empty($input['birthdate']) ? $input['birthdate'] : null,
+                !empty($input['hired_on']) ? $input['hired_on'] : null,
+                !empty($input['role']) ? $input['role'] : null,
+                !empty($input['evaluation']) ? $input['evaluation'] : null,
                 $input['status'] ?? 'active',
-                $input['available'] ?? 1,
-                $input['max_capacity'] ?? 0,
+                (int)($input['available'] ?? 1),
+                (int)($input['max_capacity'] ?? 0),
                 $input['memo'] ?? null,
+                (int)!empty($input['overseas']),
+                (int)!empty($input['side_job']),
+                (int)!empty($input['soriblock_basic']),
+                (int)!empty($input['soriblock_advanced']),
             ]);
         } catch (PDOException $e) {
             if ($e->getCode() == 23000) jsonError('이미 사용 중인 로그인 ID입니다');
@@ -61,10 +72,24 @@ switch ($action) {
 
         $fields = [];
         $params = [];
-        foreach (['coach_name','status','available','max_capacity','memo'] as $f) {
+        $boolFields = ['available','overseas','side_job','soriblock_basic','soriblock_advanced'];
+        $nullableFields = ['korean_name','birthdate','hired_on','role','evaluation'];
+        foreach (['coach_name','status','max_capacity','memo'] as $f) {
             if (array_key_exists($f, $input)) {
                 $fields[] = "{$f} = ?";
                 $params[] = $input[$f];
+            }
+        }
+        foreach ($boolFields as $f) {
+            if (array_key_exists($f, $input)) {
+                $fields[] = "{$f} = ?";
+                $params[] = (int)!empty($input[$f]);
+            }
+        }
+        foreach ($nullableFields as $f) {
+            if (array_key_exists($f, $input)) {
+                $fields[] = "{$f} = ?";
+                $params[] = ($input[$f] === '' || $input[$f] === null) ? null : $input[$f];
             }
         }
         if (!empty($input['password'])) {
