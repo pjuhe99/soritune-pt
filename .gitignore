@@ -1,3 +1,4 @@
 .db_credentials
 uploads/imports/*
 !uploads/imports/.gitkeep
+logs/*.log
