@@ -98,9 +98,132 @@ switch ($action) {
 
         jsonSuccess(array_merge(['base_month' => $baseMonth], $result));
 
+    case 'update_allocation':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            jsonError('POST only', 405);
+        }
+        $input = getJsonInput();
+        $id                  = (int)($input['id'] ?? 0);
+        $finalAllocation     = (int)($input['final_allocation'] ?? -1);
+        $expectedUpdatedAt   = $input['expected_updated_at'] ?? '';
+
+        if ($id <= 0) jsonError('id가 필요합니다');
+        if ($finalAllocation < 0 || $finalAllocation > 9999) {
+            jsonError('final_allocation은 0 ~ 9999 사이여야 합니다');
+        }
+        if ($expectedUpdatedAt === '') {
+            jsonError('expected_updated_at이 필요합니다');
+        }
+
+        // Load current row for old_value + compare
+        $current = $db->prepare("
+            SELECT id, base_month, auto_allocation, final_allocation, updated_at
+              FROM coach_retention_scores
+             WHERE id = ?
+        ");
+        $current->execute([$id]);
+        $row = $current->fetch();
+        if (!$row) jsonError('행을 찾을 수 없습니다', 404);
+
+        // Optimistic lock check (§9.5)
+        if ($row['updated_at'] !== $expectedUpdatedAt) {
+            // Conflict: return current server state
+            $latest = _fetchRowById($db, $id);
+            jsonSuccess([
+                'ok'   => false,
+                'code' => 'conflict',
+                'row'  => $latest,
+            ]);
+        }
+
+        $db->beginTransaction();
+        try {
+            $upd = $db->prepare("
+                UPDATE coach_retention_scores
+                   SET final_allocation = ?,
+                       adjusted_by = ?,
+                       adjusted_at = NOW()
+                 WHERE id = ? AND updated_at = ?
+            ");
+            $upd->execute([
+                $finalAllocation, (int)$admin['id'], $id, $expectedUpdatedAt
+            ]);
+            $affected = $upd->rowCount();
+
+            if ($affected === 0) {
+                $db->rollBack();
+                $latest = _fetchRowById($db, $id);
+                jsonSuccess([
+                    'ok'   => false,
+                    'code' => 'conflict',
+                    'row'  => $latest,
+                ]);
+            }
+
+            logChange(
+                $db, 'retention_allocation', $id, 'final_allocation_update',
+                ['final_allocation' => (int)$row['final_allocation']],
+                ['final_allocation' => $finalAllocation],
+                'admin', (int)$admin['id']
+            );
+
+            $db->commit();
+        } catch (Throwable $e) {
+            $db->rollBack();
+            jsonError('저장 실패: ' . $e->getMessage(), 500);
+        }
+
+        $latest = _fetchRowById($db, $id);
+
+        // summary recomputed on server for authoritative value
+        $sumStmt = $db->prepare("
+            SELECT SUM(auto_allocation) AS sa, SUM(final_allocation) AS sf
+              FROM coach_retention_scores WHERE base_month = ?
+        ");
+        $sumStmt->execute([$row['base_month']]);
+        $sums = $sumStmt->fetch();
+
+        $runStmt = $db->prepare("
+            SELECT total_new FROM coach_retention_runs WHERE base_month = ?
+        ");
+        $runStmt->execute([$row['base_month']]);
+        $totalNew = (int)($runStmt->fetchColumn() ?: 0);
+
+        jsonSuccess([
+            'ok'  => true,
+            'row' => $latest,
+            'summary' => [
+                'total_new'   => $totalNew,
+                'sum_auto'    => (int)$sums['sa'],
+                'sum_final'   => (int)$sums['sf'],
+                'unallocated' => $totalNew - (int)$sums['sf'],
+            ],
+        ]);
+
     // TODO in subsequent tasks:
-    //   update_allocation, reset_allocation, delete_snapshot
+    //   reset_allocation, delete_snapshot
 
     default:
         jsonError('알 수 없는 액션입니다', 404);
+}
+
+function _fetchRowById(PDO $db, int $id): ?array
+{
+    $s = $db->prepare("
+        SELECT id, coach_id, coach_name_snapshot, base_month, grade, rank_num,
+               total_score, new_retention_3m, existing_retention_3m,
+               assigned_members, requested_count, auto_allocation, final_allocation,
+               adjusted_by, adjusted_at, monthly_detail, updated_at
+          FROM coach_retention_scores
+         WHERE id = ?
+    ");
+    $s->execute([$id]);
+    $r = $s->fetch();
+    if (!$r) return null;
+    $r['monthly_detail'] = $r['monthly_detail'] ? json_decode($r['monthly_detail'], true) : [];
+    foreach (['id','rank_num','assigned_members','requested_count','auto_allocation','final_allocation'] as $k) {
+        $r[$k] = (int)$r[$k];
+    }
+    if ($r['coach_id'] !== null) $r['coach_id'] = (int)$r['coach_id'];
+    return $r;
 }
