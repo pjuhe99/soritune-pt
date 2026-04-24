@@ -3,6 +3,7 @@
  *
  * Structure: 계산 실행 카드 → 스냅샷 탭 → 요약 패널 (sticky) → 결과 테이블 → 매핑 안 된 코치 배너
  */
+// Note: user-supplied strings in rows/unmapped must be escaped with UI.esc() when rendered (see Task 11).
 App.registerPage('retention', {
   state: {
     baseMonth: null,           // 현재 로드된 기준월
@@ -10,7 +11,13 @@ App.registerPage('retention', {
     rows: [],                  // coach_retention_scores 행 배열
     unmapped: { pt_only: [], coach_site_only: [] },
     summary: { total_new: 0, sum_auto: 0, sum_final: 0, unallocated: 0 },
+    snapshots: [],
+    // used in Task 12 for save debouncing
     pendingSaves: new Map(),   // id → timeout handle (debounce)
+  },
+
+  isMounted() {
+    return !!document.getElementById('retentionApp');
   },
 
   async render() {
@@ -66,12 +73,27 @@ App.registerPage('retention', {
       const body = document.getElementById('retentionBody');
       body.innerHTML = '<div class="loading">계산 중...</div>';
 
-      const res = await API.post('/api/retention.php?action=calculate', { base_month: baseMonth, total_new: totalNew });
-      if (!res.ok) { alert(res.message || '계산 실패'); return; }
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
 
-      this.loadFromResponse(res.data);
-      await this.loadSnapshots();
-      this.renderBody();
+      try {
+        const res = await API.post('/api/retention.php?action=calculate', { base_month: baseMonth, total_new: totalNew });
+        if (!this.isMounted()) return;
+        if (!res.ok) {
+          const bodyEl = document.getElementById('retentionBody');
+          if (bodyEl) {
+            bodyEl.innerHTML = `<div class="card" style="padding:16px;color:var(--color-error, #c0392b)">계산 실패: ${UI.esc(res.message || '알 수 없는 오류')}</div>`;
+          }
+          return;
+        }
+
+        this.loadFromResponse(res.data);
+        await this.loadSnapshots();
+        if (!this.isMounted()) return;
+        this.renderBody();
+      } finally {
+        if (submitBtn && this.isMounted()) submitBtn.disabled = false;
+      }
     });
   },
 
@@ -91,23 +113,27 @@ App.registerPage('retention', {
   loadFromResponse(data) {
     this.state.baseMonth = data.base_month;
     this.state.totalNew  = data.total_new ?? data.summary?.total_new ?? 0;
-    this.state.rows      = data.rows || [];
-    this.state.unmapped  = data.unmapped_coaches || { pt_only: [], coach_site_only: [] };
-    this.state.summary   = data.summary || { total_new: 0, sum_auto: 0, sum_final: 0, unallocated: 0 };
+    this.state.rows      = data.rows ?? [];
+    this.state.unmapped  = data.unmapped_coaches ?? { pt_only: [], coach_site_only: [] };
+    this.state.summary   = data.summary ?? { total_new: 0, sum_auto: 0, sum_final: 0, unallocated: 0 };
   },
 
   async loadSnapshots() {
     const res = await API.get('/api/retention.php?action=snapshots');
     if (!res.ok) return;
-    this.snapshots = res.data.snapshots || [];
+    if (!this.isMounted()) return;
+    this.state.snapshots = res.data.snapshots ?? [];
     // Table 실제 렌더링은 다음 태스크에서
   },
 
   renderBody() {
+    if (!this.isMounted()) return;
+    const body = document.getElementById('retentionBody');
+    if (!body) return;
     // 이 태스크에서는 간단히 "계산 완료" 표시만
-    document.getElementById('retentionBody').innerHTML =
+    body.innerHTML =
       `<div class="card" style="padding:16px">
-        <strong>${this.state.baseMonth}</strong> 계산 완료 — ${this.state.rows.length}명, 총 ${this.state.summary.total_new}명 신규
+        <strong>${this.state.baseMonth ?? '—'}</strong> 계산 완료 — ${this.state.rows.length}명, 총 ${this.state.summary.total_new}명 신규
       </div>`;
   },
 });
