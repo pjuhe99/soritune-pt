@@ -215,12 +215,12 @@ switch ($action) {
             $stmt = $db->prepare("
                 UPDATE coach_retention_scores
                    SET final_allocation = auto_allocation,
-                       adjusted_by = ?,
-                       adjusted_at = NOW()
+                       adjusted_by = NULL,
+                       adjusted_at = NULL
                  WHERE base_month = ?
                    AND final_allocation <> auto_allocation
             ");
-            $stmt->execute([(int)$admin['id'], $baseMonth]);
+            $stmt->execute([$baseMonth]);
             $affected = $stmt->rowCount();
 
             logChange(
