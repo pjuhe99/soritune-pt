@@ -69,7 +69,8 @@ PT 리텐션 관리 탭 + 월 시프트 반영 + cross-DB 계산 + 수동 조정
 ```sql
 CREATE TABLE `coach_retention_scores` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `coach_id` INT NOT NULL,                 -- PT coaches.id
+  `coach_id` INT DEFAULT NULL,             -- PT coaches.id, 삭제된 코치면 NULL
+  `coach_name_snapshot` VARCHAR(100) NOT NULL,  -- 계산 시점의 coach_name (표시용 fallback)
   `base_month` VARCHAR(7) NOT NULL,        -- 'YYYY-MM'
   `grade` VARCHAR(5) DEFAULT NULL,         -- A+, A, B, C, D
   `rank_num` INT DEFAULT NULL,
@@ -84,11 +85,19 @@ CREATE TABLE `coach_retention_scores` (
   `adjusted_at` DATETIME DEFAULT NULL,
   `monthly_detail` LONGTEXT DEFAULT NULL,  -- JSON
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+                          ON UPDATE CURRENT_TIMESTAMP(3),  -- 낙관적 락 토큰
   UNIQUE KEY `uq_coach_month` (`coach_id`, `base_month`),
-  FOREIGN KEY (`coach_id`) REFERENCES `coaches`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`coach_id`) REFERENCES `coaches`(`id`) ON DELETE SET NULL,
   INDEX `idx_base_month` (`base_month`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
+
+**`coach_id` nullable + `ON DELETE SET NULL`**: PT에서 코치를 삭제해도 과거 리텐션 스냅샷이 보존됨. 삭제된 코치의 행은 `coach_id=NULL`이 되고 UI는 `coach_name_snapshot`으로 표시(예: `Alex (삭제됨)`).
+
+**`UNIQUE (coach_id, base_month)`**: MySQL `UNIQUE`는 NULL을 중복 간주하지 않으므로, 서로 다른 타이밍에 삭제된 코치 두 명이 같은 base_month에 NULL로 남아도 충돌 없음. 재계산은 "coach_id NOT NULL"인 행에만 영향.
+
+**`updated_at DATETIME(3)`**: 밀리초 정밀도. `update_allocation` 낙관적 락 토큰으로 사용 (§7, §9.5).
 
 ### 5.2 `coach_retention_runs`
 ```sql
@@ -112,9 +121,10 @@ ALTER TABLE change_logs MODIFY target_type
 
 | 필드 | 정책 |
 |---|---|
-| `grade`, `rank_num`, `total_score`, `*_retention_3m`, `assigned_members`, `requested_count`, `auto_allocation`, `monthly_detail` | 덮어쓰기 |
+| `coach_name_snapshot`, `grade`, `rank_num`, `total_score`, `*_retention_3m`, `assigned_members`, `requested_count`, `auto_allocation`, `monthly_detail` | 덮어쓰기 |
 | `final_allocation` | 신규 행이면 `auto_allocation`으로 초기화. 이미 존재하면 **보존** |
 | `adjusted_by`, `adjusted_at` | 수동 조정 시에만 기록. 재계산으로 변경 없음 |
+| `updated_at` | MySQL `ON UPDATE CURRENT_TIMESTAMP(3)`로 자동 갱신 — 재계산·리셋·수동조정 모두 토큰을 bump (§9.5) |
 
 ## 6. 계산 로직
 
@@ -143,8 +153,10 @@ for ($i = 1; $i <= 3; $i++) { $months[] = date('Y-m', strtotime("$baseMonth-01 -
 
 ### 6.3 저장 대상
 - PT `coach_retention_scores` UPSERT: `ON DUPLICATE KEY UPDATE`로 작성
+- `coach_id`는 매핑 성공한 PT coaches.id. `coach_name_snapshot`은 계산 시점 PT coach_name
 - `final_allocation`은 `COALESCE(기존값, VALUES(auto_allocation))` 패턴으로 신규 행만 초기화
-- `coach_retention_runs`에 base_month, total_new, calculated_at, calculated_by 업서트
+- `updated_at`은 MySQL이 자동 bump (낙관적 락 토큰, §9.5) — 재계산은 모든 영향 행의 토큰을 갱신 → 대기 중이던 stale `update_allocation`이 자동 거절됨
+- `coach_retention_runs`에 base_month, total_new, unmapped_coaches, calculated_at, calculated_by 업서트
 
 ### 6.4 나머지 로직 (변경 없음)
 - 점수 환산 (`retentionToScore`)
@@ -165,12 +177,12 @@ for ($i = 1; $i <= 3; $i++) { $months[] = date('Y-m', strtotime("$baseMonth-01 -
 
 | Method | Action | 입력 | 출력 | 비고 |
 |---|---|---|---|---|
-| GET | `snapshots` | — | `[{base_month, total_coaches, last_calculated_at, total_new}, …]` | 드롭다운/탭용 |
-| GET | `view` | `base_month` | `{rows, unmapped_coaches, summary, total_new}` | 저장된 결과 조회 (coach DB 접근 불필요) |
-| POST | `calculate` | `base_month`, `total_new` | `{rows, unmapped_coaches, summary}` | 재계산 + UPSERT. final_allocation은 신규 행만 초기화 |
-| POST | `update_allocation` | `id`, `final_allocation` | `{ok, summary}` | 단일 코치 최종 배정 편집. `change_logs` 기록 |
-| POST | `reset_allocation` | `base_month` | `{ok}` | 전체 final_allocation을 auto로 리셋 |
-| POST | `delete_snapshot` | `base_month` | `{ok}` | 스냅샷 삭제 (확인 모달 필수) |
+| GET | `snapshots` | — | `[{base_month, total_coaches, last_calculated_at, total_new}, …]` | 드롭다운/탭용. `total_coaches`는 `SELECT base_month, COUNT(*) FROM coach_retention_scores GROUP BY base_month`로 집계 (denormalize 하지 않음) |
+| GET | `view` | `base_month` | `{rows, unmapped_coaches, summary, total_new}` | 저장된 결과 조회 (coach DB 접근 불필요). 각 row에 `updated_at` 포함 |
+| POST | `calculate` | `base_month`, `total_new` | `{rows, unmapped_coaches, summary}` | 재계산 + UPSERT. final_allocation은 신규 행만 초기화. 모든 영향받은 행의 `updated_at` bump |
+| POST | `update_allocation` | `id`, `final_allocation`, `expected_updated_at` | `{ok:true, row}` 또는 `{ok:false, code:'conflict', row}` | 단일 코치 최종 배정 편집. 낙관적 락(§9.5). `change_logs` 기록 |
+| POST | `reset_allocation` | `base_month` | `{ok, updated_rows}` | 전체 final_allocation을 auto로 리셋. 영향받은 행의 `updated_at` bump |
+| POST | `delete_snapshot` | `base_month` | `{ok, deleted_scores, deleted_runs}` | `coach_retention_scores`와 `coach_retention_runs` 해당 월을 단일 트랜잭션으로 삭제. 확인 모달 필수 |
 
 **공통**:
 - 모든 액션 `requireAdmin()` 게이트
@@ -183,7 +195,7 @@ for ($i = 1; $i <= 3; $i++) { $months[] = date('Y-m', strtotime("$baseMonth-01 -
 - `total_new`: 0 ~ 10000 정수
 - `final_allocation`: 0 ~ 9999 정수
 
-**동시성**: 단일 행 UPDATE 기준 last-write-wins. 현실 사용 패턴상 문제없음.
+**동시성**: §9.5 낙관적 락으로 보호. debounce 대기 중인 요청과 `reset_allocation`/`calculate`의 경합을 자동으로 감지해 충돌 시 클라이언트가 갱신값으로 리프레시.
 
 ## 8. Admin UI
 
@@ -227,6 +239,8 @@ for ($i = 1; $i <= 3; $i++) { $months[] = date('Y-m', strtotime("$baseMonth-01 -
 - 페이지 진입 시 최신 스냅샷 자동 로드
 - 페이지 이탈 시 debounce 대기 중이면 강제 flush
 - 옵티미스틱 업데이트 + 실패 시 서버 값으로 롤백
+- **충돌 처리** (§9.5): `update_allocation` 응답이 `code:'conflict'`면 해당 행만 서버 값으로 교체 + 토스트 "다른 작업으로 갱신되었습니다, 최신값으로 로드했습니다"
+- **재계산/리셋 직후**: 테이블의 모든 행 `updated_at`이 무효화되므로 서버가 돌려준 새 rows를 통째로 교체 렌더링
 
 ## 9. 권한 & 에러 처리
 
@@ -258,6 +272,30 @@ PT에는 DEV/PROD DB 분리가 없으므로 PROD에만 적용.
 - `target_id=coach_retention_scores.id`
 - `old_value={final_allocation:이전값}`, `new_value={final_allocation:새값}`
 - `actor_type='admin'`, `actor_id=관리자.id`
+
+### 9.5 동시성 — 낙관적 락 프로토콜
+
+**모티브**: debounce 600ms 대기 중인 UPDATE 요청이 `reset_allocation`·`calculate` 이후에 늦게 도착해 최신 상태를 덮어쓰는 경합을 방지한다.
+
+**토큰**: `coach_retention_scores.updated_at` (DATETIME(3), 밀리초 정밀도, `ON UPDATE CURRENT_TIMESTAMP(3)`).
+
+**프로토콜**:
+
+1. 클라이언트는 `view` / `calculate` 응답에서 각 행의 `updated_at`을 받아 보관.
+2. `update_allocation` 호출 시 `{id, final_allocation, expected_updated_at}`을 보냄.
+3. 서버 쿼리:
+   ```sql
+   UPDATE coach_retention_scores
+      SET final_allocation = ?, adjusted_by = ?, adjusted_at = NOW()
+    WHERE id = ?
+      AND updated_at = ?;
+   ```
+   `ROW_COUNT() = 1` → 성공. 응답으로 최신 행(`{id, final_allocation, updated_at}`) 반환.
+   `ROW_COUNT() = 0` → 충돌. 해당 행을 다시 SELECT해서 `{ok:false, code:'conflict', row}` 반환.
+4. 클라이언트는 `conflict` 수신 시 해당 행을 서버 값으로 리프레시 + 토스트("다른 작업으로 갱신되었습니다, 최신값으로 로드했습니다").
+5. `reset_allocation`·`calculate`는 같은 `updated_at`을 bump하므로 대기 중이던 stale 요청은 자동으로 거절된다.
+
+**동일 사용자 경합 완화**: 페이지 이탈 시 debounce flush는 유지하되, `beforeunload` 후 도착한 응답은 UI가 이미 없으므로 무시.
 
 ## 10. coach 사이트 1단계 hotfix 상세
 
@@ -299,6 +337,12 @@ coach 레포 `main` 브랜치 커밋 → 사용자 승인 후 prod pull.
 - "자동값으로 리셋" → final이 auto로 복원
 - `change_logs`에 변경 이력 남음
 
+### 11.5a 동시성 시나리오 (§9.5 검증)
+- **Reset 경합**: 행 A 편집 → debounce 대기 중에 `자동값으로 리셋` 클릭 → 늦게 도착한 A의 update 요청이 409로 거절되고 UI는 A의 auto 값으로 복원
+- **Calculate 경합**: 행 A 편집 → debounce 대기 중 `계산 실행` → 재계산은 auto만 갱신·final 보존이지만 `updated_at`이 바뀜 → A의 업데이트는 409로 거절되고 UI는 서버의 현재 값을 표시
+- **탭 2개**: 탭1에서 A=5로 편집, 탭2에서 A=7로 편집 → 나중 도착이 409로 거절, UI가 승자 값으로 동기화
+- **삭제 코치 스냅샷**: PT에서 코치 삭제 → 과거 스냅샷 행은 `coach_id=NULL, coach_name_snapshot="이름"` 상태로 조회됨. UI는 "이름 (삭제됨)" 표시
+
 ### 11.6 잔여 극단값
 - total_new < 자동 합: 잔여 음수(빨강)
 - total_new = 0: 자동 0, 잔여 0
@@ -326,8 +370,10 @@ PT는 DEV/PROD 분리가 없고 단일 main 브랜치이므로 커밋 = prod 반
 (a) 로컬에서 코드 작성 & 수동 검증 (PHP 내장 서버 등)
 (b) PT DB에 마이그레이션 적용:
     - migrations/NNNN_add_coach_retention.sql
-      (coach_retention_scores 생성, coach_retention_runs 생성,
-       change_logs.target_type ENUM 확장)
+      - coach_retention_scores 생성 (coach_id nullable + SET NULL FK,
+        coach_name_snapshot NOT NULL, updated_at DATETIME(3) ON UPDATE)
+      - coach_retention_runs 생성 (unmapped_coaches JSON 포함)
+      - change_logs.target_type ENUM 확장: 'retention_allocation' 추가
 (c) GRANT 스크립트 실행 (PT MySQL 유저에게 COACH DB 읽기 권한 부여)
 (d) (a)의 코드 커밋 → push → main (prod 반영)
 (e) prod에서 사용자 수동 검증 (§11 체크리스트)
