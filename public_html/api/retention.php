@@ -200,8 +200,81 @@ switch ($action) {
             ],
         ]);
 
-    // TODO in subsequent tasks:
-    //   reset_allocation, delete_snapshot
+    case 'reset_allocation':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            jsonError('POST only', 405);
+        }
+        $input = getJsonInput();
+        $baseMonth = $input['base_month'] ?? '';
+        if (!preg_match('/^\d{4}-\d{2}$/', $baseMonth)) {
+            jsonError('base_month 형식이 잘못되었습니다 (YYYY-MM)');
+        }
+
+        $db->beginTransaction();
+        try {
+            $stmt = $db->prepare("
+                UPDATE coach_retention_scores
+                   SET final_allocation = auto_allocation,
+                       adjusted_by = ?,
+                       adjusted_at = NOW()
+                 WHERE base_month = ?
+                   AND final_allocation <> auto_allocation
+            ");
+            $stmt->execute([(int)$admin['id'], $baseMonth]);
+            $affected = $stmt->rowCount();
+
+            logChange(
+                $db, 'retention_allocation', 0, 'reset_all',
+                null, ['base_month' => $baseMonth, 'reset_rows' => $affected],
+                'admin', (int)$admin['id']
+            );
+            $db->commit();
+        } catch (Throwable $e) {
+            $db->rollBack();
+            jsonError('리셋 실패: ' . $e->getMessage(), 500);
+        }
+
+        jsonSuccess(['ok' => true, 'updated_rows' => $affected]);
+
+    case 'delete_snapshot':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            jsonError('POST only', 405);
+        }
+        $input = getJsonInput();
+        $baseMonth = $input['base_month'] ?? '';
+        if (!preg_match('/^\d{4}-\d{2}$/', $baseMonth)) {
+            jsonError('base_month 형식이 잘못되었습니다 (YYYY-MM)');
+        }
+
+        $db->beginTransaction();
+        try {
+            $d1 = $db->prepare("DELETE FROM coach_retention_scores WHERE base_month = ?");
+            $d1->execute([$baseMonth]);
+            $deletedScores = $d1->rowCount();
+
+            $d2 = $db->prepare("DELETE FROM coach_retention_runs WHERE base_month = ?");
+            $d2->execute([$baseMonth]);
+            $deletedRuns = $d2->rowCount();
+
+            logChange(
+                $db, 'retention_allocation', 0, 'snapshot_deleted',
+                null, ['base_month' => $baseMonth,
+                       'deleted_scores' => $deletedScores,
+                       'deleted_runs' => $deletedRuns],
+                'admin', (int)$admin['id']
+            );
+
+            $db->commit();
+        } catch (Throwable $e) {
+            $db->rollBack();
+            jsonError('삭제 실패: ' . $e->getMessage(), 500);
+        }
+
+        jsonSuccess([
+            'ok' => true,
+            'deleted_scores' => $deletedScores,
+            'deleted_runs'   => $deletedRuns,
+        ]);
 
     default:
         jsonError('알 수 없는 액션입니다', 404);
