@@ -15,6 +15,8 @@ DROP TABLE IF EXISTS `order_sessions`;
 DROP TABLE IF EXISTS `orders`;
 DROP TABLE IF EXISTS `member_accounts`;
 DROP TABLE IF EXISTS `members`;
+DROP TABLE IF EXISTS `coach_retention_runs`;
+DROP TABLE IF EXISTS `coach_retention_scores`;
 DROP TABLE IF EXISTS `coaches`;
 DROP TABLE IF EXISTS `admins`;
 
@@ -179,7 +181,7 @@ CREATE TABLE `merge_logs` (
 -- 11. change_logs
 CREATE TABLE `change_logs` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `target_type` ENUM('member','order','coach_assignment','merge') NOT NULL,
+  `target_type` ENUM('member','order','coach_assignment','merge','retention_allocation') NOT NULL,
   `target_id` INT NOT NULL,
   `action` VARCHAR(50) NOT NULL,
   `old_value` JSON,
@@ -191,7 +193,42 @@ CREATE TABLE `change_logs` (
   INDEX `idx_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 12. migration_logs
+-- 12. coach_retention_scores
+CREATE TABLE `coach_retention_scores` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `coach_id` INT DEFAULT NULL,
+  `coach_name_snapshot` VARCHAR(100) NOT NULL,
+  `base_month` VARCHAR(7) NOT NULL,
+  `grade` VARCHAR(5) DEFAULT NULL,
+  `rank_num` INT DEFAULT NULL,
+  `total_score` DECIMAL(6,1) DEFAULT 0.0,
+  `new_retention_3m` DECIMAL(10,8) DEFAULT 0,
+  `existing_retention_3m` DECIMAL(10,8) DEFAULT 0,
+  `assigned_members` INT DEFAULT 0,
+  `requested_count` INT DEFAULT 0,
+  `auto_allocation` INT DEFAULT 0,
+  `final_allocation` INT DEFAULT 0,
+  `adjusted_by` INT DEFAULT NULL,
+  `adjusted_at` DATETIME DEFAULT NULL,
+  `monthly_detail` LONGTEXT DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+                            ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY `uq_coach_month` (`coach_id`, `base_month`),
+  FOREIGN KEY (`coach_id`) REFERENCES `coaches`(`id`) ON DELETE SET NULL,
+  INDEX `idx_base_month` (`base_month`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 13. coach_retention_runs
+CREATE TABLE `coach_retention_runs` (
+  `base_month` VARCHAR(7) PRIMARY KEY,
+  `total_new` INT NOT NULL DEFAULT 0,
+  `unmapped_coaches` LONGTEXT DEFAULT NULL,
+  `calculated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `calculated_by` INT DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 14. migration_logs
 CREATE TABLE `migration_logs` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `batch_id` VARCHAR(50) NOT NULL,
