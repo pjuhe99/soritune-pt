@@ -73,8 +73,33 @@ switch ($action) {
             ],
         ]);
 
+    case 'calculate':
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            jsonError('POST only', 405);
+        }
+        $input = getJsonInput();
+        $baseMonth = $input['base_month'] ?? '';
+        $totalNew  = (int)($input['total_new'] ?? 0);
+
+        if (!preg_match('/^\d{4}-\d{2}$/', $baseMonth)) {
+            jsonError('base_month 형식이 잘못되었습니다 (YYYY-MM)');
+        }
+        if ($totalNew < 0 || $totalNew > 10000) {
+            jsonError('전체 신규 인원은 0 ~ 10000 사이여야 합니다');
+        }
+
+        try {
+            $result = calculateRetention($db, $baseMonth, $totalNew, (int)$admin['id']);
+        } catch (PDOException $e) {
+            jsonError('coach 사이트 DB 접근 실패: ' . $e->getMessage(), 500);
+        } catch (Throwable $e) {
+            jsonError('계산 오류: ' . $e->getMessage(), 500);
+        }
+
+        jsonSuccess(array_merge(['base_month' => $baseMonth], $result));
+
     // TODO in subsequent tasks:
-    //   calculate, update_allocation, reset_allocation, delete_snapshot
+    //   update_allocation, reset_allocation, delete_snapshot
 
     default:
         jsonError('알 수 없는 액션입니다', 404);
