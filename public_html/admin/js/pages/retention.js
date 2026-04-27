@@ -155,6 +155,7 @@ App.registerPage('retention', {
     this.bindSnapshotTabs();
     this.bindRowDetails();
     this.bindFinalInputs();
+    this.bindSummaryActions();
   },
 
   renderSnapshotTabs() {
@@ -320,6 +321,35 @@ App.registerPage('retention', {
         await this.loadSnapshot(month);
       });
     });
+  },
+
+  bindSummaryActions() {
+    const resetBtn = document.getElementById('ret_resetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', async () => {
+        if (!this.state.baseMonth) return;
+        if (!confirm(`${this.state.baseMonth}의 모든 최종 배정을 자동값으로 되돌릴까요?`)) return;
+        await this.flushPendingSaves();
+        const res = await API.post('/api/retention.php?action=reset_allocation', { base_month: this.state.baseMonth });
+        if (!res.ok) { alert(res.message || '리셋 실패'); return; }
+        await this.loadSnapshot(this.state.baseMonth);
+        UI.toast(`${res.data.updated_rows}개 행이 자동값으로 복원되었습니다.`);
+      });
+    }
+    const delBtn = document.getElementById('ret_deleteBtn');
+    if (delBtn) {
+      delBtn.addEventListener('click', async () => {
+        if (!this.state.baseMonth) return;
+        if (!confirm(`${this.state.baseMonth} 스냅샷을 완전히 삭제할까요? (되돌릴 수 없습니다)`)) return;
+        await this.flushPendingSaves();
+        const res = await API.post('/api/retention.php?action=delete_snapshot', { base_month: this.state.baseMonth });
+        if (!res.ok) { alert(res.message || '삭제 실패'); return; }
+        UI.toast(`삭제 완료: ${res.data.deleted_scores}행 + 스냅샷 메타 ${res.data.deleted_runs}건`);
+        this.state.baseMonth = null;
+        this.state.rows = [];
+        await this.loadSnapshots();
+      });
+    }
   },
 
   bindRowDetails() {
