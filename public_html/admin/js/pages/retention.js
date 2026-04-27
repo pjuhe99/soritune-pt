@@ -122,18 +122,226 @@ App.registerPage('retention', {
     const res = await API.get('/api/retention.php?action=snapshots');
     if (!res.ok) return;
     if (!this.isMounted()) return;
-    this.state.snapshots = res.data.snapshots ?? [];
-    // Table 실제 렌더링은 다음 태스크에서
+    this.snapshots = res.data.snapshots || [];
+    if (this.state.baseMonth) {
+      this.renderBody();
+    } else if (this.snapshots.length > 0) {
+      await this.loadSnapshot(this.snapshots[0].base_month);
+    } else {
+      const body = document.getElementById('retentionBody');
+      if (body) {
+        body.innerHTML =
+          '<div class="empty-state">아직 계산된 스냅샷이 없습니다. 기준월과 전체 신규 인원을 입력하고 계산하세요.</div>';
+      }
+    }
   },
 
   renderBody() {
-    if (!this.isMounted()) return;
+    const html = `
+      ${this.renderSnapshotTabs()}
+      ${this.renderUnmappedBanner()}
+      ${this.renderSummary()}
+      ${this.renderTable()}
+    `;
+    document.getElementById('retentionBody').innerHTML = html;
+    this.bindSnapshotTabs();
+    this.bindRowDetails();
+  },
+
+  renderSnapshotTabs() {
+    const snaps = this.snapshots || [];
+    if (snaps.length === 0) return '';
+    const buttons = snaps.map(s => {
+      const active = s.base_month === this.state.baseMonth ? 'btn-primary' : 'btn-outline';
+      return `<button class="btn btn-small ${active} ret-snap-tab" data-month="${s.base_month}">${s.base_month}</button>`;
+    }).join(' ');
+    return `
+      <div class="card" style="padding:12px;margin-bottom:12px">
+        <div class="ret-snap-row">
+          <div class="ret-snap-label">저장된 스냅샷:</div>
+          <div class="ret-snap-tabs">${buttons}</div>
+        </div>
+      </div>
+    `;
+  },
+
+  renderUnmappedBanner() {
+    const u = this.state.unmapped || {};
+    const ptOnly = (u.pt_only || []).length;
+    const coachOnly = (u.coach_site_only || []);
+    if (coachOnly.length === 0 && ptOnly === 0) return '';
+    const names = coachOnly.join(', ');
+    return `
+      <div class="ret-unmapped-banner">
+        ⚠️ coach 사이트와 이름(영문)이 일치하지 않아 리텐션에서 제외된 코치:
+        <strong>${UI.esc(names) || '-'}</strong>
+        ${ptOnly > 0 ? ` / PT에만 존재하는 코치 ${ptOnly}명은 리텐션 0%로 표시됩니다.` : ''}
+      </div>
+    `;
+  },
+
+  renderSummary() {
+    const s = this.state.summary;
+    const unalloc = s.unallocated;
+    const colorClass = unalloc > 0 ? 'ret-unalloc-pos' : (unalloc < 0 ? 'ret-unalloc-neg' : 'ret-unalloc-zero');
+    return `
+      <div class="ret-summary-sticky">
+        <div class="ret-summary-card">
+          <div class="label">전체 신규</div>
+          <div class="value">${s.total_new}명</div>
+        </div>
+        <div class="ret-summary-card">
+          <div class="label">자동 배정 합</div>
+          <div class="value">${s.sum_auto}명</div>
+        </div>
+        <div class="ret-summary-card">
+          <div class="label">현재 합</div>
+          <div class="value">${s.sum_final}명</div>
+        </div>
+        <div class="ret-summary-card ${colorClass}">
+          <div class="label">잔여</div>
+          <div class="value">${unalloc}명</div>
+        </div>
+        <div class="ret-summary-actions">
+          <button class="btn btn-small btn-outline" id="ret_resetBtn">자동값으로 리셋</button>
+          <button class="btn btn-small btn-danger" id="ret_deleteBtn">스냅샷 삭제</button>
+        </div>
+      </div>
+    `;
+  },
+
+  renderTable() {
+    if (this.state.rows.length === 0) {
+      return `<div class="empty-state">아직 계산된 결과가 없습니다. 기준월과 전체 신규 인원을 입력하고 계산하세요.</div>`;
+    }
+    const rows = this.state.rows.map(r => this.renderTableRow(r)).join('');
+    return `
+      <div class="data-table-wrapper">
+        <table class="data-table ret-table">
+          <thead>
+            <tr>
+              <th>등수</th>
+              <th>코치</th>
+              <th>등급</th>
+              <th class="text-right">총점</th>
+              <th class="text-right">3M 신규</th>
+              <th class="text-right">3M 기존</th>
+              <th class="text-right">담당</th>
+              <th class="text-right">희망</th>
+              <th class="text-right">자동</th>
+              <th class="text-right">최종</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  renderTableRow(r) {
+    const gradeBadge = this.gradeBadge(r.grade);
+    const coachName = r.coach_id
+      ? UI.esc(r.coach_name_snapshot)
+      : `<span class="ret-deleted">${UI.esc(r.coach_name_snapshot)} (삭제됨)</span>`;
+    return `
+      <tr data-row-id="${r.id}">
+        <td class="text-center">${r.rank_num ?? '-'}</td>
+        <td><strong>${coachName}</strong></td>
+        <td>${gradeBadge}</td>
+        <td class="text-right">${(+r.total_score).toFixed(1)}</td>
+        <td class="text-right">${(r.new_retention_3m * 100).toFixed(1)}%</td>
+        <td class="text-right">${(r.existing_retention_3m * 100).toFixed(1)}%</td>
+        <td class="text-right">${r.assigned_members}</td>
+        <td class="text-right">${r.requested_count}</td>
+        <td class="text-right">${r.auto_allocation}</td>
+        <td class="text-right">
+          <input type="number" class="ret-final-input" value="${r.final_allocation}" min="0" max="9999" readonly data-id="${r.id}">
+          <span class="ret-save-status" data-id="${r.id}"></span>
+        </td>
+        <td>
+          <button class="btn btn-small btn-outline ret-detail-toggle" data-id="${r.id}">▶</button>
+        </td>
+      </tr>
+      <tr class="ret-detail-row" data-for="${r.id}" style="display:none">
+        <td colspan="11">${this.renderDetail(r)}</td>
+      </tr>
+    `;
+  },
+
+  renderDetail(r) {
+    const detail = r.monthly_detail || [];
+    if (detail.length === 0) return '<div style="padding:8px;color:var(--text-secondary)">상세 데이터 없음</div>';
+    const rows = detail.map(d => `
+      <tr>
+        <td>${d.month}</td>
+        <td>${d.prev_month}</td>
+        <td class="text-right">${d.new_total}</td>
+        <td class="text-right">${d.new_repurchase}</td>
+        <td class="text-right">${(d.new_retention_rate * 100).toFixed(1)}%</td>
+        <td class="text-right">${d.exist_total}</td>
+        <td class="text-right">${d.exist_repurchase}</td>
+        <td class="text-right">${(d.exist_retention_rate * 100).toFixed(1)}%</td>
+      </tr>`).join('');
+    return `
+      <table class="ret-detail-table">
+        <thead>
+          <tr>
+            <th>측정월</th><th>모수 월</th>
+            <th>신규 총</th><th>신규 유지</th><th>신규 리텐션</th>
+            <th>기존 총</th><th>기존 유지</th><th>기존 리텐션</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  },
+
+  gradeBadge(grade) {
+    if (!grade) return '<span class="badge">-</span>';
+    const map = { 'A+': 'badge-ap', 'A': 'badge-a', 'B': 'badge-b', 'C': 'badge-c', 'D': 'badge-d' };
+    const cls = map[grade] || 'badge';
+    return `<span class="badge ${cls}">${grade}</span>`;
+  },
+
+  bindSnapshotTabs() {
+    document.querySelectorAll('.ret-snap-tab').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const month = btn.dataset.month;
+        await this.loadSnapshot(month);
+      });
+    });
+  },
+
+  bindRowDetails() {
+    document.querySelectorAll('.ret-detail-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        const detail = document.querySelector(`.ret-detail-row[data-for="${id}"]`);
+        if (!detail) return;
+        const open = detail.style.display !== 'none';
+        detail.style.display = open ? 'none' : '';
+        btn.textContent = open ? '▶' : '▼';
+      });
+    });
+  },
+
+  async loadSnapshot(baseMonth) {
     const body = document.getElementById('retentionBody');
     if (!body) return;
-    // 이 태스크에서는 간단히 "계산 완료" 표시만
-    body.innerHTML =
-      `<div class="card" style="padding:16px">
-        <strong>${this.state.baseMonth ?? '—'}</strong> 계산 완료 — ${this.state.rows.length}명, 총 ${this.state.summary.total_new}명 신규
-      </div>`;
+    body.innerHTML = '<div class="loading">로딩 중...</div>';
+    const res = await API.get(`/api/retention.php?action=view&base_month=${encodeURIComponent(baseMonth)}`);
+    if (!this.isMounted()) return;
+    const bodyEl = document.getElementById('retentionBody');
+    if (!bodyEl) return;
+    if (!res.ok) { bodyEl.innerHTML = `<div class="empty-state">${res.message}</div>`; return; }
+    this.loadFromResponse(res.data);
+    this.renderBody();
+    const baseMonthInput = document.getElementById('ret_baseMonth');
+    const totalNewInput  = document.getElementById('ret_totalNew');
+    const shiftHintEl    = document.getElementById('ret_shiftHint');
+    if (baseMonthInput) baseMonthInput.value = baseMonth;
+    if (totalNewInput)  totalNewInput.value  = this.state.totalNew;
+    if (shiftHintEl)    shiftHintEl.innerHTML = this.shiftHintText(baseMonth);
   },
 });
