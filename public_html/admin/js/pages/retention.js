@@ -94,6 +94,11 @@ App.registerPage('retention', {
         if (submitBtn && this.isMounted()) submitBtn.disabled = false;
       }
     });
+
+    window.addEventListener('beforeunload', () => {
+      // 브라우저 종료 시 best-effort (async 보장 안 됨. 네비게이션 내 이탈은 SPA가 처리)
+      for (const [id, h] of this.state.pendingSaves.entries()) clearTimeout(h);
+    });
   },
 
   shiftHintText(baseMonthStr) {
@@ -145,6 +150,7 @@ App.registerPage('retention', {
     document.getElementById('retentionBody').innerHTML = html;
     this.bindSnapshotTabs();
     this.bindRowDetails();
+    this.bindFinalInputs();
   },
 
   renderSnapshotTabs() {
@@ -255,7 +261,7 @@ App.registerPage('retention', {
         <td class="text-right">${r.requested_count}</td>
         <td class="text-right">${r.auto_allocation}</td>
         <td class="text-right">
-          <input type="number" class="ret-final-input" value="${r.final_allocation}" min="0" max="9999" readonly data-id="${r.id}">
+          <input type="number" class="ret-final-input" value="${r.final_allocation}" min="0" max="9999" data-id="${r.id}" data-updated="${r.updated_at}">
           <span class="ret-save-status" data-id="${r.id}"></span>
         </td>
         <td>
@@ -323,6 +329,113 @@ App.registerPage('retention', {
         btn.textContent = open ? '▶' : '▼';
       });
     });
+  },
+
+  bindFinalInputs() {
+    document.querySelectorAll('.ret-final-input').forEach(input => {
+      input.addEventListener('input', () => {
+        this.recomputeSummary();
+        this.scheduleSave(input);
+      });
+    });
+  },
+
+  recomputeSummary() {
+    // Local sum from current inputs (before server confirms)
+    let sumFinal = 0;
+    document.querySelectorAll('.ret-final-input').forEach(i => {
+      sumFinal += parseInt(i.value, 10) || 0;
+    });
+    this.state.summary.sum_final = sumFinal;
+    this.state.summary.unallocated = this.state.summary.total_new - sumFinal;
+
+    // Update DOM summary (the "현재 합" and "잔여" cards)
+    const cards = document.querySelectorAll('.ret-summary-card');
+    if (cards.length >= 4) {
+      cards[2].querySelector('.value').textContent = `${sumFinal}명`;
+      const unalloc = this.state.summary.unallocated;
+      const fourth = cards[3];
+      fourth.querySelector('.value').textContent = `${unalloc}명`;
+      fourth.classList.remove('ret-unalloc-pos','ret-unalloc-neg','ret-unalloc-zero');
+      fourth.classList.add(unalloc > 0 ? 'ret-unalloc-pos' : (unalloc < 0 ? 'ret-unalloc-neg' : 'ret-unalloc-zero'));
+    }
+  },
+
+  scheduleSave(input) {
+    const id = parseInt(input.dataset.id, 10);
+    const status = document.querySelector(`.ret-save-status[data-id="${id}"]`);
+    if (status) status.textContent = '…';
+
+    const prev = this.state.pendingSaves.get(id);
+    if (prev) clearTimeout(prev);
+    const handle = setTimeout(() => this.saveAllocation(input), 600);
+    this.state.pendingSaves.set(id, handle);
+  },
+
+  async saveAllocation(input) {
+    const id = parseInt(input.dataset.id, 10);
+    const status = document.querySelector(`.ret-save-status[data-id="${id}"]`);
+    const value = parseInt(input.value, 10) || 0;
+    const expected = input.dataset.updated;
+
+    this.state.pendingSaves.delete(id);
+
+    const res = await API.post('/api/retention.php?action=update_allocation', {
+      id, final_allocation: value, expected_updated_at: expected,
+    });
+
+    if (!res.ok) {
+      if (status) status.innerHTML = '<span class="ret-save-err">!</span>';
+      UI.toast('저장 실패: ' + (res.message || ''));
+      return;
+    }
+    const data = res.data;
+    if (data.ok === false && data.code === 'conflict') {
+      // Refresh row to server value
+      this.mergeRow(data.row);
+      UI.toast('다른 작업으로 갱신되었습니다. 최신값으로 로드했습니다.');
+      if (status) status.innerHTML = '<span class="ret-save-err">×</span>';
+      return;
+    }
+    // success
+    this.mergeRow(data.row);
+    if (data.summary) {
+      this.state.summary = data.summary;
+      this.refreshSummaryCards();
+    }
+    if (status) status.innerHTML = '<span class="ret-save-ok">✓</span>';
+  },
+
+  mergeRow(row) {
+    const idx = this.state.rows.findIndex(r => r.id === row.id);
+    if (idx >= 0) this.state.rows[idx] = { ...this.state.rows[idx], ...row };
+    // Update only the input value + data-updated attribute; don't rerender whole table
+    const input = document.querySelector(`.ret-final-input[data-id="${row.id}"]`);
+    if (input) {
+      input.value = row.final_allocation;
+      input.dataset.updated = row.updated_at;
+    }
+  },
+
+  refreshSummaryCards() {
+    const s = this.state.summary;
+    const cards = document.querySelectorAll('.ret-summary-card');
+    if (cards.length < 4) return;
+    cards[0].querySelector('.value').textContent = `${s.total_new}명`;
+    cards[1].querySelector('.value').textContent = `${s.sum_auto}명`;
+    cards[2].querySelector('.value').textContent = `${s.sum_final}명`;
+    cards[3].querySelector('.value').textContent = `${s.unallocated}명`;
+    cards[3].classList.remove('ret-unalloc-pos','ret-unalloc-neg','ret-unalloc-zero');
+    const u = s.unallocated;
+    cards[3].classList.add(u > 0 ? 'ret-unalloc-pos' : (u < 0 ? 'ret-unalloc-neg' : 'ret-unalloc-zero'));
+  },
+
+  async flushPendingSaves() {
+    for (const [id, handle] of this.state.pendingSaves.entries()) {
+      clearTimeout(handle);
+      const input = document.querySelector(`.ret-final-input[data-id="${id}"]`);
+      if (input) await this.saveAllocation(input);
+    }
   },
 
   async loadSnapshot(baseMonth) {
