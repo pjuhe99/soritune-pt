@@ -333,6 +333,7 @@ App.registerPage('retention', {
         const res = await API.post('/api/retention.php?action=reset_allocation', { base_month: this.state.baseMonth });
         if (!res.ok) { alert(res.message || '리셋 실패'); return; }
         await this.loadSnapshot(this.state.baseMonth);
+        if (!this.isMounted()) return;
         UI.toast(`${res.data.updated_rows}개 행이 자동값으로 복원되었습니다.`);
       });
     }
@@ -344,6 +345,7 @@ App.registerPage('retention', {
         await this.flushPendingSaves();
         const res = await API.post('/api/retention.php?action=delete_snapshot', { base_month: this.state.baseMonth });
         if (!res.ok) { alert(res.message || '삭제 실패'); return; }
+        if (!this.isMounted()) return;
         UI.toast(`삭제 완료: ${res.data.deleted_scores}행 + 스냅샷 메타 ${res.data.deleted_runs}건`);
         this.state.baseMonth = null;
         this.state.rows = [];
