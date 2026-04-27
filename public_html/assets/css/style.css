@@ -1299,3 +1299,86 @@ input, select, textarea {
   color: var(--text-secondary);
   font-size: 12px;
 }
+
+/* =========================================================
+   Retention Management Page
+   ========================================================= */
+
+.ret-calc-form {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.ret-shift-hint {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.ret-snap-row { display: flex; gap: 10px; align-items: center; }
+.ret-snap-label { font-size: 13px; color: var(--text-secondary); }
+.ret-snap-tabs  { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.ret-unmapped-banner {
+  background: #3b2a00;
+  color: #ffa42b;
+  border-left: 3px solid #ffa42b;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.ret-summary-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #121212;
+  padding: 12px 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #272727;
+}
+.ret-summary-card {
+  background: #181818;
+  border-radius: 6px;
+  padding: 10px 14px;
+  min-width: 100px;
+}
+.ret-summary-card .label { color: var(--text-secondary); font-size: 11px; }
+.ret-summary-card .value { font-size: 18px; font-weight: 700; margin-top: 2px; }
+.ret-summary-card.ret-unalloc-pos  .value { color: #FF5E00; }
+.ret-summary-card.ret-unalloc-neg  .value { color: #f3727f; }
+.ret-summary-card.ret-unalloc-zero .value { color: var(--text-secondary); }
+.ret-summary-actions { margin-left: auto; display: flex; gap: 6px; }
+
+.ret-table .ret-final-input {
+  width: 64px;
+  text-align: right;
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid #4d4d4d;
+  background: #1f1f1f;
+  color: #fff;
+}
+.ret-save-status { display: inline-block; width: 14px; margin-left: 4px; }
+.ret-save-ok  { color: #7bc47f; }
+.ret-save-err { color: #f3727f; font-weight: 700; }
+
+.ret-detail-row td { background: #1a1a1a; padding: 12px 16px; }
+.ret-detail-table { width: auto; font-size: 13px; }
+.ret-detail-table th { color: var(--text-secondary); font-weight: 600; padding: 4px 10px; }
+.ret-detail-table td { padding: 4px 10px; }
+
+.ret-deleted { color: var(--text-secondary); font-style: italic; }
+
+/* Grade badges */
+.badge-ap { background: #FF5E00; color: #000; }
+.badge-a  { background: #ffa42b; color: #000; }
+.badge-b  { background: #539df5; color: #000; }
+.badge-c  { background: #7c7c7c; color: #000; }
+.badge-d  { background: #4d4d4d; color: #fff; }
