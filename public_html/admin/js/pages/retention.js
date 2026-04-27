@@ -13,6 +13,7 @@ App.registerPage('retention', {
     summary: { total_new: 0, sum_auto: 0, sum_final: 0, unallocated: 0 },
     // used in Task 12 for save debouncing
     pendingSaves: new Map(),   // id → timeout handle (debounce)
+    inflightSaves: new Map(),  // id → Promise (serializes saves per row to avoid stale token races)
   },
 
   isMounted() {
@@ -95,10 +96,13 @@ App.registerPage('retention', {
       }
     });
 
-    window.addEventListener('beforeunload', () => {
-      // 브라우저 종료 시 best-effort (async 보장 안 됨. 네비게이션 내 이탈은 SPA가 처리)
-      for (const [id, h] of this.state.pendingSaves.entries()) clearTimeout(h);
-    });
+    if (!this._beforeunloadBound) {
+      window.addEventListener('beforeunload', () => {
+        // 브라우저 종료 시 best-effort (async 보장 안 됨. 네비게이션 내 이탈은 SPA가 처리)
+        for (const [, h] of this.state.pendingSaves.entries()) clearTimeout(h);
+      });
+      this._beforeunloadBound = true;
+    }
   },
 
   shiftHintText(baseMonthStr) {
@@ -374,19 +378,40 @@ App.registerPage('retention', {
 
   async saveAllocation(input) {
     const id = parseInt(input.dataset.id, 10);
+    this.state.pendingSaves.delete(id);
+
+    // Serialize per-row saves: wait for any in-flight save on this row to settle
+    // so this save reads a fresh data-updated token after mergeRow runs.
+    const prior = this.state.inflightSaves.get(id);
+    if (prior) {
+      try { await prior; } catch (_) { /* prior may have failed; we still try */ }
+    }
+
+    const promise = this._doSaveAllocation(input, id);
+    this.state.inflightSaves.set(id, promise);
+    try {
+      await promise;
+    } finally {
+      // Only clear if this is still the latest in-flight (a chained save may have replaced us)
+      if (this.state.inflightSaves.get(id) === promise) {
+        this.state.inflightSaves.delete(id);
+      }
+    }
+  },
+
+  async _doSaveAllocation(input, id) {
     const status = document.querySelector(`.ret-save-status[data-id="${id}"]`);
     const value = parseInt(input.value, 10) || 0;
     const expected = input.dataset.updated;
 
-    this.state.pendingSaves.delete(id);
-
     const res = await API.post('/api/retention.php?action=update_allocation', {
       id, final_allocation: value, expected_updated_at: expected,
     });
+    if (!this.isMounted()) return;
 
     if (!res.ok) {
       if (status) status.innerHTML = '<span class="ret-save-err">!</span>';
-      UI.toast('저장 실패: ' + (res.message || ''));
+      UI.toast('저장 실패: ' + (res.message || '알 수 없는 오류'));
       return;
     }
     const data = res.data;
@@ -401,7 +426,14 @@ App.registerPage('retention', {
     this.mergeRow(data.row);
     if (data.summary) {
       this.state.summary = data.summary;
-      this.refreshSummaryCards();
+      // If user is mid-typing in any final-input, recompute locally instead of painting server summary
+      // (server values are correct as of the save, but the user has further edits in flight).
+      const focusedInput = document.activeElement;
+      if (focusedInput && focusedInput.classList && focusedInput.classList.contains('ret-final-input')) {
+        this.recomputeSummary();
+      } else {
+        this.refreshSummaryCards();
+      }
     }
     if (status) status.innerHTML = '<span class="ret-save-ok">✓</span>';
   },
@@ -409,10 +441,13 @@ App.registerPage('retention', {
   mergeRow(row) {
     const idx = this.state.rows.findIndex(r => r.id === row.id);
     if (idx >= 0) this.state.rows[idx] = { ...this.state.rows[idx], ...row };
-    // Update only the input value + data-updated attribute; don't rerender whole table
+    // Update only the input value + data-updated attribute; don't rerender whole table.
+    // Don't clobber the user's in-progress typing — only patch value when input is unfocused.
     const input = document.querySelector(`.ret-final-input[data-id="${row.id}"]`);
     if (input) {
-      input.value = row.final_allocation;
+      if (document.activeElement !== input) {
+        input.value = row.final_allocation;
+      }
       input.dataset.updated = row.updated_at;
     }
   },
