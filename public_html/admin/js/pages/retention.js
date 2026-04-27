@@ -11,7 +11,6 @@ App.registerPage('retention', {
     rows: [],                  // coach_retention_scores 행 배열
     unmapped: { pt_only: [], coach_site_only: [] },
     summary: { total_new: 0, sum_auto: 0, sum_final: 0, unallocated: 0 },
-    snapshots: [],
     // used in Task 12 for save debouncing
     pendingSaves: new Map(),   // id → timeout handle (debounce)
   },
@@ -182,7 +181,7 @@ App.registerPage('retention', {
 
   renderSummary() {
     const s = this.state.summary;
-    const unalloc = s.unallocated;
+    const unalloc = s.unallocated ?? 0;
     const colorClass = unalloc > 0 ? 'ret-unalloc-pos' : (unalloc < 0 ? 'ret-unalloc-neg' : 'ret-unalloc-zero');
     return `
       <div class="ret-summary-sticky">
@@ -334,7 +333,7 @@ App.registerPage('retention', {
     if (!this.isMounted()) return;
     const bodyEl = document.getElementById('retentionBody');
     if (!bodyEl) return;
-    if (!res.ok) { bodyEl.innerHTML = `<div class="empty-state">${res.message}</div>`; return; }
+    if (!res.ok) { bodyEl.innerHTML = `<div class="empty-state">${UI.esc(res.message || '스냅샷을 불러올 수 없습니다')}</div>`; return; }
     this.loadFromResponse(res.data);
     this.renderBody();
     const baseMonthInput = document.getElementById('ret_baseMonth');
