@@ -103,5 +103,88 @@ App.registerPage('matching', {
       });
     }
   },
-  renderDraftReview(root) { /* Task 9~11 */ root.innerHTML = '<div>(draft review — Task 9~11)</div>'; },
+  renderDraftReview(root) {
+    const cur = this.state.current;
+    const run = cur.run;
+    const drafts = cur.drafts;
+
+    // (capacity 카드는 Task 10에서, 확정/취소 버튼은 Task 11에서. 우선 테이블 위주.)
+    root.innerHTML = `
+      <div class="page-header"><h1>매칭 관리 · Batch #${run.id}</h1></div>
+      <div class="match-summary-bar">
+        <span>기준월: <strong>${UI.esc(run.base_month)}</strong></span>
+        <span>총 ${run.total_orders}</span>
+        <span class="match-source-prev">이전코치 ${run.prev_coach_count}</span>
+        <span class="match-source-pool">신규풀 ${run.new_pool_count}</span>
+        <span class="match-source-unmatched">미매칭 ${run.unmatched_count}</span>
+        <span id="match_actions"></span>
+      </div>
+      <div id="match_capacityCards"></div>
+      <table class="match-table">
+        <thead>
+          <tr>
+            <th>회원</th><th>상품</th><th>start_date</th>
+            <th>source</th><th>이전 코치</th><th>제안 코치</th><th>비고</th>
+          </tr>
+        </thead>
+        <tbody id="match_tbody">
+          ${drafts.map(d => this._renderDraftRow(d)).join('')}
+        </tbody>
+      </table>
+    `;
+    this._bindDraftDropdowns();
+  },
+
+  _renderDraftRow(d) {
+    const sourceClass = `match-source-${d.source}`;
+    const proposedSelect = this._coachSelectHTML(d.id, d.proposed_coach_id);
+    return `
+      <tr data-draft-id="${d.id}" class="${sourceClass}">
+        <td>${UI.esc(d.member_name)}</td>
+        <td>${UI.esc(d.product_name)}</td>
+        <td>${UI.esc(d.start_date)}</td>
+        <td><span class="match-source-badge ${sourceClass}">${UI.esc(d.source)}</span></td>
+        <td>${UI.esc(d.prev_coach_name || '—')}</td>
+        <td>${proposedSelect}</td>
+        <td><span class="match-reason">${UI.esc(d.reason || '')}</span></td>
+      </tr>
+    `;
+  },
+
+  _coachSelectHTML(draftId, currentCoachId) {
+    const opts = ['<option value="">— (미매칭) —</option>']
+      .concat(this.state.coaches.map(c =>
+        `<option value="${c.id}" ${c.id===currentCoachId ? 'selected' : ''}>${UI.esc(c.coach_name)}</option>`
+      ));
+    return `<select class="match-coach-dropdown" data-draft-id="${draftId}">${opts.join('')}</select>`;
+  },
+
+  _bindDraftDropdowns() {
+    document.querySelectorAll('.match-coach-dropdown').forEach(sel => {
+      sel.addEventListener('change', async (e) => {
+        const draftId = parseInt(sel.dataset.draftId, 10);
+        const v = sel.value;
+        const newCoachId = v === '' ? null : parseInt(v, 10);
+        sel.disabled = true;
+        const res = await API.post('/api/matching.php?action=update_draft',
+          { draft_id: draftId, proposed_coach_id: newCoachId });
+        if (!this.isMounted()) return;
+        sel.disabled = false;
+        if (!res.ok) { UI.toast(res.message || '저장 실패'); return; }
+        this._mergeDraftRow(res.data.row);
+      });
+    });
+  },
+
+  _mergeDraftRow(row) {
+    const idx = this.state.current.drafts.findIndex(d => d.id === row.id);
+    if (idx >= 0) {
+      this.state.current.drafts[idx] = { ...this.state.current.drafts[idx], ...row };
+    }
+    // tbody 해당 row만 다시 그림
+    const tr = document.querySelector(`tr[data-draft-id="${row.id}"]`);
+    if (tr) tr.outerHTML = this._renderDraftRow(this.state.current.drafts[idx]);
+    this._bindDraftDropdowns();  // 새 셀렉트 재바인딩
+    // 카드/요약은 Task 10에서 같이 갱신
+  },
 });
