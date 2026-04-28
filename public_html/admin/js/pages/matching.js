@@ -133,7 +133,49 @@ App.registerPage('matching', {
       </table>
     `;
     this._renderCapacityCards();
+    document.getElementById('match_actions').innerHTML = `
+      <button id="match_confirmBtn" class="btn btn-primary">확정</button>
+      <button id="match_cancelBtn"  class="btn btn-outline">이 batch 폐기</button>
+    `;
+    this._bindActionButtons();
     this._bindDraftDropdowns();
+  },
+
+  _bindActionButtons() {
+    document.getElementById('match_confirmBtn').addEventListener('click', async (e) => {
+      if (!confirm(`Batch #${this.state.current.run.id} 매칭 결과를 확정합니다. 계속할까요?`)) return;
+      e.target.disabled = true;
+      e.target.textContent = '확정 중...';
+      const res = await API.post('/api/matching.php?action=confirm',
+        { batch_id: this.state.current.run.id });
+      if (!this.isMounted()) return;
+      if (!res.ok) {
+        UI.toast(res.message || '확정 실패');
+        e.target.disabled = false;
+        e.target.textContent = '확정';
+        return;
+      }
+      UI.toast(`${res.data.matched_count}건 매칭 확정 완료`);
+      this.state.current = null;
+      this.renderBody();   // 빈 상태로 돌아감
+    });
+    document.getElementById('match_cancelBtn').addEventListener('click', async (e) => {
+      if (!confirm(`Batch #${this.state.current.run.id}를 통째로 폐기합니다. 되돌릴 수 없습니다. 계속할까요?`)) return;
+      e.target.disabled = true;
+      e.target.textContent = '폐기 중...';
+      const res = await API.post('/api/matching.php?action=cancel',
+        { batch_id: this.state.current.run.id });
+      if (!this.isMounted()) return;
+      if (!res.ok) {
+        UI.toast(res.message || '폐기 실패');
+        e.target.disabled = false;
+        e.target.textContent = '이 batch 폐기';
+        return;
+      }
+      UI.toast('Batch 폐기 완료');
+      this.state.current = null;
+      this.renderBody();
+    });
   },
 
   _renderCapacityCards() {
