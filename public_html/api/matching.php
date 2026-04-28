@@ -198,6 +198,122 @@ function _actionStart(PDO $db, array $admin): void {
     $_GET['action'] = 'current';
     _actionCurrent($db);
 }
-function _actionUpdateDraft(PDO $db, array $admin): void { jsonError('미구현', 501); }
+/**
+ * POST ?action=update_draft
+ * body: { draft_id: N, proposed_coach_id: N|null }
+ *
+ * 어드민이 행별 드롭다운으로 코치를 바꾸면 호출.
+ * - proposed_coach_id != null: source='manual_override', reason='수동 조정 (이전: {old_source})'
+ * - proposed_coach_id == null: source='unmatched', reason='수동 비움'
+ */
+function _actionUpdateDraft(PDO $db, array $admin): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonError('POST only', 405);
+
+    $input = getJsonInput();
+    $draftId = (int)($input['draft_id'] ?? 0);
+    $newCoachId = array_key_exists('proposed_coach_id', $input)
+        ? ($input['proposed_coach_id'] !== null ? (int)$input['proposed_coach_id'] : null)
+        : null;
+
+    if ($draftId <= 0) jsonError('draft_id가 필요합니다');
+
+    $stmt = $db->prepare("
+        SELECT d.id, d.source, d.proposed_coach_id, r.status AS run_status
+          FROM coach_assignment_drafts d
+          JOIN coach_assignment_runs r ON r.id = d.batch_id
+         WHERE d.id = ?
+    ");
+    $stmt->execute([$draftId]);
+    $row = $stmt->fetch();
+    if (!$row) jsonError('draft를 찾을 수 없습니다', 404);
+    if ($row['run_status'] !== 'draft') {
+        jsonError('이 batch는 더 이상 편집할 수 없습니다 (status=' . $row['run_status'] . ')', 409);
+    }
+
+    if ($newCoachId !== null) {
+        // 코치 존재/active 검사
+        $coach = $db->prepare("SELECT id, status FROM coaches WHERE id = ?");
+        $coach->execute([$newCoachId]);
+        $c = $coach->fetch();
+        if (!$c) jsonError('코치를 찾을 수 없습니다', 404);
+        if ($c['status'] !== 'active') jsonError('inactive 코치에는 매칭할 수 없습니다', 400);
+
+        $oldSource = $row['source'];
+        $upd = $db->prepare("
+            UPDATE coach_assignment_drafts
+               SET proposed_coach_id = ?,
+                   source            = 'manual_override',
+                   reason            = ?
+             WHERE id = ?
+        ");
+        $upd->execute([
+            $newCoachId,
+            "수동 조정 (이전: {$oldSource})",
+            $draftId,
+        ]);
+    } else {
+        $upd = $db->prepare("
+            UPDATE coach_assignment_drafts
+               SET proposed_coach_id = NULL,
+                   source            = 'unmatched',
+                   reason            = '수동 비움'
+             WHERE id = ?
+        ");
+        $upd->execute([$draftId]);
+    }
+
+    // 갱신된 row 반환
+    $sel = $db->prepare("
+        SELECT d.id, d.order_id, d.proposed_coach_id, d.source,
+               d.prev_coach_id, d.prev_end_date, d.reason, d.updated_at,
+               c.coach_name AS proposed_coach_name,
+               pc.coach_name AS prev_coach_name
+          FROM coach_assignment_drafts d
+          LEFT JOIN coaches c  ON c.id  = d.proposed_coach_id
+          LEFT JOIN coaches pc ON pc.id = d.prev_coach_id
+         WHERE d.id = ?
+    ");
+    $sel->execute([$draftId]);
+    $latest = $sel->fetch();
+    $latest['proposed_coach_id'] = $latest['proposed_coach_id'] !== null ? (int)$latest['proposed_coach_id'] : null;
+    $latest['prev_coach_id']     = $latest['prev_coach_id']     !== null ? (int)$latest['prev_coach_id']     : null;
+
+    jsonSuccess(['row' => $latest]);
+}
 function _actionConfirm(PDO $db, array $admin): void { jsonError('미구현', 501); }
-function _actionCancel(PDO $db, array $admin): void { jsonError('미구현', 501); }
+/**
+ * POST ?action=cancel
+ * body: { batch_id: N }
+ *
+ * batch를 통째로 폐기. drafts CASCADE 삭제. orders는 매칭대기 그대로.
+ * change_logs 기록은 생략 (drafts는 임시 데이터).
+ */
+function _actionCancel(PDO $db, array $admin): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonError('POST only', 405);
+
+    $input = getJsonInput();
+    $batchId = (int)($input['batch_id'] ?? 0);
+    if ($batchId <= 0) jsonError('batch_id가 필요합니다');
+
+    $run = $db->prepare("SELECT id, status FROM coach_assignment_runs WHERE id = ?");
+    $run->execute([$batchId]);
+    $r = $run->fetch();
+    if (!$r) jsonError('batch를 찾을 수 없습니다', 404);
+    if ($r['status'] !== 'draft') {
+        jsonError('이미 처리된 batch입니다 (status=' . $r['status'] . ')', 409);
+    }
+
+    $db->beginTransaction();
+    try {
+        $upd = $db->prepare("UPDATE coach_assignment_runs SET status='cancelled', cancelled_at=NOW() WHERE id = ?");
+        $upd->execute([$batchId]);
+        $del = $db->prepare("DELETE FROM coach_assignment_drafts WHERE batch_id = ?");
+        $del->execute([$batchId]);
+        $db->commit();
+    } catch (Throwable $e) {
+        $db->rollBack();
+        jsonError('취소 실패: ' . $e->getMessage(), 500);
+    }
+
+    jsonSuccess(['ok' => true]);
+}
