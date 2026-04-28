@@ -178,9 +178,8 @@ App.registerPage('matching', {
 
   _mergeDraftRow(row) {
     const idx = this.state.current.drafts.findIndex(d => d.id === row.id);
-    if (idx >= 0) {
-      this.state.current.drafts[idx] = { ...this.state.current.drafts[idx], ...row };
-    }
+    if (idx < 0) return;   // local state out of sync — bail
+    this.state.current.drafts[idx] = { ...this.state.current.drafts[idx], ...row };
     // tbody 해당 row만 다시 그림
     const tr = document.querySelector(`tr[data-draft-id="${row.id}"]`);
     if (tr) tr.outerHTML = this._renderDraftRow(this.state.current.drafts[idx]);
