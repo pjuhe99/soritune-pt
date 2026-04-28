@@ -12,7 +12,10 @@ App.registerPage('matching', {
   state: {
     current: null,          // {run, drafts} 또는 null
     coaches: [],            // 드롭다운용 active 코치 전체
-    isMounted: () => !!document.querySelector('#pageContent[data-page="matching"]'),
+  },
+
+  isMounted() {
+    return document.getElementById('pageContent')?.dataset.page === 'matching';
   },
 
   async render() {
@@ -25,7 +28,7 @@ App.registerPage('matching', {
         API.get('/api/coaches.php?action=list'),
         API.get('/api/matching.php?action=current'),
       ]);
-      if (!this.state.isMounted()) return;
+      if (!this.isMounted()) return;
       if (!coachesRes.ok || !currentRes.ok) {
         root.innerHTML = `<div class="empty-state">데이터 로드 실패</div>`;
         return;
