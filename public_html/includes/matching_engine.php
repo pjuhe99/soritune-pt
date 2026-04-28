@@ -23,6 +23,9 @@ require_once __DIR__ . '/db.php';
  * @param array  $capacitySnapshot   [['coach_id'=>1,'coach_name'=>'Tia','final_allocation'=>10], ...]
  *                                   coaches.status='active' 만 포함되어 있다고 가정
  * @return array stats
+ *
+ * @note Caller MUST wrap this in a transaction. On error, delete the
+ *       coach_assignment_runs row (FK CASCADE removes any partial drafts).
  */
 function runMatchingForBatch(PDO $db, int $batchId, string $baseMonth, array $capacitySnapshot): array {
     $orders = _fetchUnmatchedOrders($db);
@@ -90,12 +93,14 @@ function _fetchUnmatchedOrders(PDO $db): array {
  */
 function _classifyOrder(PDO $db, array $current): array {
     $stmt = $db->prepare("
-        SELECT id, coach_id, end_date
-          FROM orders
-         WHERE member_id = ?
-           AND id        != ?
-           AND status NOT IN ('환불','중단')
-         ORDER BY end_date DESC
+        SELECT prev.id, prev.coach_id, prev.end_date,
+               c.status AS coach_status
+          FROM orders prev
+          LEFT JOIN coaches c ON c.id = prev.coach_id
+         WHERE prev.member_id = ?
+           AND prev.id        != ?
+           AND prev.status NOT IN ('환불','중단')
+         ORDER BY prev.end_date DESC
          LIMIT 1
     ");
     $stmt->execute([$current['member_id'], $current['id']]);
@@ -127,12 +132,7 @@ function _classifyOrder(PDO $db, array $current): array {
         ];
     }
 
-    $coachStmt = $db->prepare("SELECT status FROM coaches WHERE id = ?");
-    $coachStmt->execute([$prevCoachId]);
-    $coachRow = $coachStmt->fetch();
-    $coachStatus = $coachRow['status'] ?? null;
-
-    if ($coachStatus !== 'active') {
+    if (($prev['coach_status'] ?? null) !== 'active') {
         return [
             'source' => 'new_pool',
             'proposed_coach_id' => null,
