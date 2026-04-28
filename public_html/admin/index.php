@@ -61,6 +61,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
       <a href="#merge" data-page="merge">동일인관리</a>
       <a href="#import" data-page="import">데이터관리</a>
       <a href="#retention" data-page="retention">리텐션관리</a>
+      <a href="#matching" data-page="matching">매칭관리</a>
     </nav>
   </aside>
   <main class="main-content">
@@ -82,6 +83,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 <script src="/admin/js/pages/merge.js"></script>
 <script src="/admin/js/pages/import.js"></script>
 <script src="/admin/js/pages/retention.js"></script>
+<script src="/admin/js/pages/matching.js"></script>
 <script>App.init();</script>
 <?php endif; ?>
 
