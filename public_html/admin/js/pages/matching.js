@@ -132,7 +132,42 @@ App.registerPage('matching', {
         </tbody>
       </table>
     `;
+    this._renderCapacityCards();
     this._bindDraftDropdowns();
+  },
+
+  _renderCapacityCards() {
+    const host = document.getElementById('match_capacityCards');
+    if (!host) return;
+    const snap = this.state.current.run.capacity_snapshot || [];
+
+    // 코치별 used 계산: drafts 중 source IN (new_pool, manual_override) + 매칭된 (proposed_coach_id 일치)
+    const used = {};
+    this.state.current.drafts.forEach(d => {
+      if (!d.proposed_coach_id) return;
+      if (d.source === 'previous_coach') return; // 이전 코치는 capacity 카드에 카운트 안 함 (별개 풀)
+      used[d.proposed_coach_id] = (used[d.proposed_coach_id] || 0) + 1;
+    });
+
+    if (snap.length === 0) {
+      host.innerHTML = `<div class="match-capacity-empty">⚠️ 기준월 ${UI.esc(this.state.current.run.base_month)}에 final_allocation > 0 인 active 코치가 없습니다. 신규는 모두 미매칭 처리됩니다.</div>`;
+      return;
+    }
+
+    host.innerHTML = `
+      <div class="match-capacity-grid">
+        ${snap.map(c => {
+          const u = used[c.coach_id] || 0;
+          const over = u > c.final_allocation;
+          return `
+            <div class="match-capacity-card ${over ? 'over' : ''}">
+              <div class="name">${UI.esc(c.coach_name)}</div>
+              <div class="value">${u} / ${c.final_allocation}</div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
   },
 
   _renderDraftRow(d) {
@@ -185,5 +220,20 @@ App.registerPage('matching', {
     if (tr) tr.outerHTML = this._renderDraftRow(this.state.current.drafts[idx]);
     this._bindDraftDropdowns();  // 새 셀렉트 재바인딩
     // 카드/요약은 Task 10에서 같이 갱신
+    this._renderCapacityCards();
+    this._updateSummaryBar();
+  },
+
+  _updateSummaryBar() {
+    // drafts 기준으로 카운트 재계산 (운영자가 source를 바꿀 때마다 sticky 바 갱신)
+    const drafts = this.state.current.drafts;
+    const counts = { previous_coach: 0, new_pool: 0, manual_override: 0, unmatched: 0 };
+    drafts.forEach(d => { counts[d.source] = (counts[d.source] || 0) + 1; });
+    const bar = document.querySelector('.match-summary-bar');
+    if (!bar) return;
+    // run의 prev_coach_count/new_pool_count는 batch 생성 시점 스냅샷이라 그대로 두고,
+    // 현재 상태는 별도 표시.
+    // (단순화: summary-bar는 run 시점 값을 유지, 카드만 동적으로 갱신)
+    // → 아무것도 안 함. capacity card가 동적 정보를 담당.
   },
 });
