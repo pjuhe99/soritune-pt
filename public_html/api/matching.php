@@ -118,7 +118,86 @@ function _actionBaseMonths(PDO $db): void {
     jsonSuccess(['base_months' => $rows]);
 }
 
-function _actionStart(PDO $db, array $admin): void { jsonError('미구현', 501); }
+/**
+ * POST ?action=start
+ * body: { base_month: "YYYY-MM" }
+ *
+ * 1. active draft가 이미 있으면 409 conflict
+ * 2. 매칭대기 order 0건이면 400
+ * 3. base_month의 coach_retention_scores를 capacity_snapshot으로 잡음
+ * 4. coach_assignment_runs INSERT (status='draft')
+ * 5. matching_engine.runMatchingForBatch() 호출 (drafts INSERT + runs 통계 업데이트)
+ * 6. 결과 반환 (action=current 형태)
+ */
+function _actionStart(PDO $db, array $admin): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonError('POST only', 405);
+
+    $input = getJsonInput();
+    $baseMonth = $input['base_month'] ?? '';
+    if (!preg_match('/^\d{4}-\d{2}$/', $baseMonth)) {
+        jsonError('base_month 형식이 잘못되었습니다 (YYYY-MM)');
+    }
+
+    // 1. active draft 검사
+    $existing = $db->query("SELECT id FROM coach_assignment_runs WHERE status='draft' LIMIT 1")->fetchColumn();
+    if ($existing) {
+        jsonError('이미 진행 중인 draft batch가 있습니다 (#' . $existing . '). 검토를 먼저 끝내거나 폐기해주세요.', 409);
+    }
+
+    // 2. 매칭대기 order 검사
+    $unmatchedCount = (int)$db->query("SELECT COUNT(*) FROM orders WHERE status='매칭대기'")->fetchColumn();
+    if ($unmatchedCount === 0) {
+        jsonError('매칭대기 상태의 주문이 없습니다.', 400);
+    }
+
+    // 3. capacity_snapshot 잡기 (active 코치 only, final_allocation>0)
+    $stmt = $db->prepare("
+        SELECT s.coach_id, c.coach_name, s.final_allocation
+          FROM coach_retention_scores s
+          JOIN coaches c ON c.id = s.coach_id
+         WHERE s.base_month = ?
+           AND c.status     = 'active'
+           AND s.final_allocation > 0
+         ORDER BY c.coach_name
+    ");
+    $stmt->execute([$baseMonth]);
+    $capacity = $stmt->fetchAll();
+    foreach ($capacity as &$row) {
+        $row['coach_id']         = (int)$row['coach_id'];
+        $row['final_allocation'] = (int)$row['final_allocation'];
+    }
+    unset($row);
+
+    // capacity 비어있어도 진행 (모두 unmatched가 될 수 있음). 운영 경고는 UI에서.
+
+    // 4. runs INSERT
+    $db->beginTransaction();
+    try {
+        $ins = $db->prepare("
+            INSERT INTO coach_assignment_runs
+              (base_month, status, started_by, capacity_snapshot)
+            VALUES (?, 'draft', ?, ?)
+        ");
+        $ins->execute([
+            $baseMonth,
+            (int)$admin['id'],
+            json_encode(array_values($capacity), JSON_UNESCAPED_UNICODE),
+        ]);
+        $batchId = (int)$db->lastInsertId();
+
+        // 5. 매칭 엔진 실행
+        $stats = runMatchingForBatch($db, $batchId, $baseMonth, $capacity);
+
+        $db->commit();
+    } catch (Throwable $e) {
+        $db->rollBack();
+        jsonError('매칭 실행 실패: ' . $e->getMessage(), 500);
+    }
+
+    // 6. current 반환 (편의 — 클라이언트가 즉시 화면 그릴 수 있게)
+    $_GET['action'] = 'current';
+    _actionCurrent($db);
+}
 function _actionUpdateDraft(PDO $db, array $admin): void { jsonError('미구현', 501); }
 function _actionConfirm(PDO $db, array $admin): void { jsonError('미구현', 501); }
 function _actionCancel(PDO $db, array $admin): void { jsonError('미구현', 501); }
