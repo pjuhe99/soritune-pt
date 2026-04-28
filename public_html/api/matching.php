@@ -280,7 +280,119 @@ function _actionUpdateDraft(PDO $db, array $admin): void {
 
     jsonSuccess(['row' => $latest]);
 }
-function _actionConfirm(PDO $db, array $admin): void { jsonError('미구현', 501); }
+/**
+ * POST ?action=confirm
+ * body: { batch_id: N }
+ *
+ * 1. 매칭된 drafts (proposed_coach_id IS NOT NULL)에 대해
+ *    - inactive 코치 검사 (있으면 fail)
+ *    - orders.coach_id ← proposed_coach_id, status='매칭완료'
+ *    - coach_assignments INSERT
+ *    - change_logs INSERT
+ * 2. runs.status='confirmed', confirmed_at=NOW()
+ * 3. drafts DELETE (audit는 change_logs + runs 메타로 충분)
+ * 미매칭 drafts (proposed_coach_id IS NULL): orders 그대로, drafts만 정리.
+ */
+function _actionConfirm(PDO $db, array $admin): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') jsonError('POST only', 405);
+
+    $input = getJsonInput();
+    $batchId = (int)($input['batch_id'] ?? 0);
+    if ($batchId <= 0) jsonError('batch_id가 필요합니다');
+
+    $run = $db->prepare("SELECT id, status FROM coach_assignment_runs WHERE id = ?");
+    $run->execute([$batchId]);
+    $r = $run->fetch();
+    if (!$r) jsonError('batch를 찾을 수 없습니다', 404);
+    if ($r['status'] !== 'draft') {
+        jsonError('이미 처리된 batch입니다 (status=' . $r['status'] . ')', 409);
+    }
+
+    // inactive 코치 있는지 사전 검사
+    $inactiveCheck = $db->prepare("
+        SELECT d.id, c.coach_name
+          FROM coach_assignment_drafts d
+          JOIN coaches c ON c.id = d.proposed_coach_id
+         WHERE d.batch_id = ?
+           AND c.status   != 'active'
+    ");
+    $inactiveCheck->execute([$batchId]);
+    $bad = $inactiveCheck->fetchAll();
+    if (!empty($bad)) {
+        $names = array_map(fn($r)=>$r['coach_name'], $bad);
+        jsonError('확정 실패: 다음 코치가 inactive 입니다 — ' . implode(', ', $names) . '. 수동으로 다른 코치를 지정해주세요.', 409);
+    }
+
+    // 매칭된 drafts 로드
+    $matchedStmt = $db->prepare("
+        SELECT d.id, d.order_id, d.proposed_coach_id, d.source,
+               o.member_id, o.coach_id AS old_coach_id
+          FROM coach_assignment_drafts d
+          JOIN orders o ON o.id = d.order_id
+         WHERE d.batch_id = ?
+           AND d.proposed_coach_id IS NOT NULL
+    ");
+    $matchedStmt->execute([$batchId]);
+    $matched = $matchedStmt->fetchAll();
+
+    $db->beginTransaction();
+    try {
+        $updOrder    = $db->prepare("UPDATE orders SET coach_id = ?, status = '매칭완료' WHERE id = ?");
+        $insAssign   = $db->prepare("
+            INSERT INTO coach_assignments (member_id, coach_id, order_id, assigned_at, reason)
+            VALUES (?, ?, ?, NOW(), ?)
+        ");
+        $insLog = $db->prepare("
+            INSERT INTO change_logs (target_type, target_id, action, old_value, new_value, actor_type, actor_id)
+            VALUES ('order', ?, 'coach_assigned', ?, ?, 'admin', ?)
+        ");
+
+        foreach ($matched as $m) {
+            $updOrder->execute([(int)$m['proposed_coach_id'], (int)$m['order_id']]);
+
+            $reasonLabel = match ($m['source']) {
+                'previous_coach'   => 'auto_match:previous_coach',
+                'new_pool'         => 'auto_match:new_pool',
+                'manual_override'  => 'auto_match:manual_override',
+                default            => 'auto_match',
+            };
+            $insAssign->execute([
+                (int)$m['member_id'],
+                (int)$m['proposed_coach_id'],
+                (int)$m['order_id'],
+                $reasonLabel,
+            ]);
+
+            $insLog->execute([
+                (int)$m['order_id'],
+                json_encode(['coach_id' => $m['old_coach_id'] !== null ? (int)$m['old_coach_id'] : null], JSON_UNESCAPED_UNICODE),
+                json_encode([
+                    'coach_id' => (int)$m['proposed_coach_id'],
+                    'source'   => $m['source'],
+                    'batch_id' => $batchId,
+                ], JSON_UNESCAPED_UNICODE),
+                (int)$admin['id'],
+            ]);
+        }
+
+        // runs 상태 전환
+        $db->prepare("UPDATE coach_assignment_runs SET status='confirmed', confirmed_at=NOW() WHERE id = ?")
+           ->execute([$batchId]);
+
+        // drafts 삭제 (audit는 change_logs + runs 메타로 충분)
+        $db->prepare("DELETE FROM coach_assignment_drafts WHERE batch_id = ?")->execute([$batchId]);
+
+        $db->commit();
+    } catch (Throwable $e) {
+        $db->rollBack();
+        jsonError('확정 실패: ' . $e->getMessage(), 500);
+    }
+
+    jsonSuccess([
+        'ok' => true,
+        'matched_count' => count($matched),
+    ]);
+}
 /**
  * POST ?action=cancel
  * body: { batch_id: N }
