@@ -69,7 +69,7 @@ switch ($action) {
             $member = $stmt->fetch();
 
             $counts = [];
-            foreach (['orders','coach_assignments','test_results','member_notes','member_accounts'] as $table) {
+            foreach (['orders','test_results','member_notes','member_accounts'] as $table) {
                 $stmt = $db->prepare("SELECT COUNT(*) FROM {$table} WHERE member_id = ?");
                 $stmt->execute([$mid]);
                 $counts[$table] = (int)$stmt->fetchColumn();
@@ -90,7 +90,7 @@ switch ($action) {
         foreach ($mergedIds as $mid) {
             // Collect moved record IDs
             $moved = [];
-            $tables = ['orders','coach_assignments','test_results','member_notes','member_accounts'];
+            $tables = ['orders','test_results','member_notes','member_accounts'];
             foreach ($tables as $table) {
                 $stmt = $db->prepare("SELECT id FROM {$table} WHERE member_id = ?");
                 $stmt->execute([$mid]);
@@ -157,7 +157,7 @@ switch ($action) {
 
         // Check for post-merge data
         $postMergeCount = 0;
-        $tables = ['orders','coach_assignments','test_results','member_notes','member_accounts'];
+        $tables = ['orders','test_results','member_notes','member_accounts'];
         foreach ($tables as $table) {
             $stmt = $db->prepare("SELECT COUNT(*) FROM {$table} WHERE member_id = ? AND created_at > ?");
             $stmt->execute([$primaryMemberId, $log['merged_at']]);

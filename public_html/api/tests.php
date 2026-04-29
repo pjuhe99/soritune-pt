@@ -13,7 +13,7 @@ switch ($action) {
         $memberId = (int)($_GET['member_id'] ?? 0);
         if (!$memberId) jsonError('member_id가 필요합니다');
         if ($user['role'] === 'coach') {
-            $stmt = $db->prepare("SELECT 1 FROM coach_assignments WHERE member_id = ? AND coach_id = ? AND released_at IS NULL");
+            $stmt = $db->prepare("SELECT 1 FROM orders WHERE member_id = ? AND coach_id = ? LIMIT 1");
             $stmt->execute([$memberId, $user['id']]);
             if (!$stmt->fetch()) jsonError('접근 권한이 없습니다', 403);
         }

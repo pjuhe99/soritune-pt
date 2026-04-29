@@ -242,12 +242,6 @@ switch ($action) {
                 }
             }
 
-            // Create coach assignment
-            if ($coachId) {
-                $db->prepare("INSERT INTO coach_assignments (member_id, coach_id, order_id) VALUES (?, ?, ?)")
-                    ->execute([$memberId, $coachId, $orderId]);
-            }
-
             $db->prepare("INSERT INTO migration_logs (batch_id, source_type, source_row, target_table, target_id, status, message)
                 VALUES (?, 'spreadsheet', ?, 'orders', ?, 'success', ?)")
                 ->execute([$batchId, $rowNum, $orderId, '주문 생성']);

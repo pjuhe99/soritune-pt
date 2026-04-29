@@ -14,15 +14,16 @@ switch ($action) {
         $search = trim($_GET['search'] ?? '');
         $statusFilter = $_GET['status'] ?? '';
         $coachFilter = $_GET['coach_id'] ?? '';
+        $productFilter = trim($_GET['product'] ?? '');
 
         $statusSQL = memberStatusSQL();
 
         $where = ["m.merged_into IS NULL"];
         $params = [];
 
-        // Coach role: only show assigned members
+        // Coach role: only show assigned members (based on any order they coach for this member)
         if ($user['role'] === 'coach') {
-            $where[] = "EXISTS (SELECT 1 FROM coach_assignments ca WHERE ca.member_id = m.id AND ca.coach_id = ? AND ca.released_at IS NULL)";
+            $where[] = "EXISTS (SELECT 1 FROM orders o WHERE o.member_id = m.id AND o.coach_id = ?)";
             $params[] = $user['id'];
         }
 
@@ -32,15 +33,31 @@ switch ($action) {
             $params = array_merge($params, [$like, $like, $like, $like]);
         }
 
-        $havingClauses = [];
-        if ($statusFilter !== '') {
-            $havingClauses[] = "display_status = ?";
-            $params[] = $statusFilter;
+        if ($coachFilter !== '') {
+            $where[] = "(
+                EXISTS (SELECT 1 FROM orders oc2 WHERE oc2.member_id = m.id AND oc2.status = '진행중' AND oc2.coach_id = ?)
+                OR (
+                    NOT EXISTS (SELECT 1 FROM orders oc3 WHERE oc3.member_id = m.id AND oc3.status = '진행중' AND oc3.coach_id IS NOT NULL)
+                    AND (SELECT oc4.coach_id FROM orders oc4 WHERE oc4.member_id = m.id AND oc4.coach_id IS NOT NULL ORDER BY oc4.start_date DESC, oc4.id DESC LIMIT 1) = ?
+                )
+            )";
+            $params[] = (int)$coachFilter;
+            $params[] = (int)$coachFilter;
         }
 
-        if ($coachFilter !== '') {
-            $where[] = "EXISTS (SELECT 1 FROM coach_assignments ca2 WHERE ca2.member_id = m.id AND ca2.coach_id = ? AND ca2.released_at IS NULL)";
-            $params[] = (int)$coachFilter;
+        if ($productFilter !== '') {
+            $where[] = "EXISTS (SELECT 1 FROM orders op WHERE op.member_id = m.id AND op.status = '진행중' AND op.product_name = ?)";
+            $params[] = $productFilter;
+        }
+
+        $havingClauses = [];
+        if ($statusFilter !== '') {
+            $statusList = array_values(array_filter(array_map('trim', explode(',', $statusFilter))));
+            if (!empty($statusList)) {
+                $placeholders = implode(',', array_fill(0, count($statusList), '?'));
+                $havingClauses[] = "display_status IN ({$placeholders})";
+                foreach ($statusList as $s) $params[] = $s;
+            }
         }
 
         $whereSQL = implode(' AND ', $where);
@@ -49,10 +66,18 @@ switch ($action) {
         $sql = "
             SELECT m.*,
               {$statusSQL} AS display_status,
-              (SELECT GROUP_CONCAT(DISTINCT c.coach_name SEPARATOR ', ')
-               FROM coach_assignments ca
-               JOIN coaches c ON c.id = ca.coach_id
-               WHERE ca.member_id = m.id AND ca.released_at IS NULL) AS current_coaches,
+              COALESCE(
+                (SELECT GROUP_CONCAT(DISTINCT c.coach_name ORDER BY c.coach_name SEPARATOR ', ')
+                 FROM orders oc JOIN coaches c ON c.id = oc.coach_id
+                 WHERE oc.member_id = m.id AND oc.status = '진행중' AND oc.coach_id IS NOT NULL),
+                (SELECT c.coach_name
+                 FROM orders oc JOIN coaches c ON c.id = oc.coach_id
+                 WHERE oc.member_id = m.id AND oc.coach_id IS NOT NULL
+                 ORDER BY oc.start_date DESC, oc.id DESC LIMIT 1)
+              ) AS current_coaches,
+              (SELECT GROUP_CONCAT(DISTINCT oa.product_name ORDER BY oa.product_name SEPARATOR ', ')
+               FROM orders oa
+               WHERE oa.member_id = m.id AND oa.status = '진행중') AS current_products,
               (SELECT COUNT(*) FROM orders o WHERE o.member_id = m.id) AS order_count
             FROM members m
             WHERE {$whereSQL}
@@ -64,13 +89,25 @@ switch ($action) {
         $stmt->execute($params);
         jsonSuccess(['members' => $stmt->fetchAll()]);
 
+    case 'active_products':
+        $where = ["o.status = '진행중'"];
+        $params = [];
+        if ($user['role'] === 'coach') {
+            $where[] = "EXISTS (SELECT 1 FROM orders o2 WHERE o2.member_id = o.member_id AND o2.coach_id = ?)";
+            $params[] = $user['id'];
+        }
+        $whereSQL = implode(' AND ', $where);
+        $stmt = $db->prepare("SELECT DISTINCT o.product_name FROM orders o WHERE {$whereSQL} ORDER BY o.product_name");
+        $stmt->execute($params);
+        jsonSuccess(['products' => $stmt->fetchAll(PDO::FETCH_COLUMN)]);
+
     case 'get':
         $id = (int)($_GET['id'] ?? 0);
         if (!$id) jsonError('ID가 필요합니다');
 
-        // Coach role: verify access
+        // Coach role: verify access (has any order for this member)
         if ($user['role'] === 'coach') {
-            $stmt = $db->prepare("SELECT 1 FROM coach_assignments WHERE member_id = ? AND coach_id = ? AND released_at IS NULL");
+            $stmt = $db->prepare("SELECT 1 FROM orders WHERE member_id = ? AND coach_id = ? LIMIT 1");
             $stmt->execute([$id, $user['id']]);
             if (!$stmt->fetch()) jsonError('접근 권한이 없습니다', 403);
         }
@@ -85,15 +122,26 @@ switch ($action) {
         $member = $stmt->fetch();
         if (!$member) jsonError('회원을 찾을 수 없습니다', 404);
 
-        // Current coaches
+        // Current coaches: coaches of 진행중 orders (distinct), else latest order's coach
         $stmt = $db->prepare("
-            SELECT ca.*, c.coach_name
-            FROM coach_assignments ca
-            JOIN coaches c ON c.id = ca.coach_id
-            WHERE ca.member_id = ? AND ca.released_at IS NULL
+            SELECT DISTINCT c.id, c.coach_name
+            FROM orders o JOIN coaches c ON c.id = o.coach_id
+            WHERE o.member_id = ? AND o.status = '진행중' AND o.coach_id IS NOT NULL
+            ORDER BY c.coach_name
         ");
         $stmt->execute([$id]);
-        $member['current_coaches'] = $stmt->fetchAll();
+        $coaches = $stmt->fetchAll();
+        if (empty($coaches)) {
+            $stmt = $db->prepare("
+                SELECT c.id, c.coach_name
+                FROM orders o JOIN coaches c ON c.id = o.coach_id
+                WHERE o.member_id = ? AND o.coach_id IS NOT NULL
+                ORDER BY o.start_date DESC, o.id DESC LIMIT 1
+            ");
+            $stmt->execute([$id]);
+            $coaches = $stmt->fetchAll();
+        }
+        $member['current_coaches'] = $coaches;
 
         // Linked accounts
         $stmt = $db->prepare("SELECT * FROM member_accounts WHERE member_id = ? ORDER BY is_primary DESC");

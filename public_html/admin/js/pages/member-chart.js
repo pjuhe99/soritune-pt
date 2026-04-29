@@ -315,16 +315,27 @@ App.registerPage('member-chart', {
   async loadCoachHistory() {
     const res = await API.get(`/api/orders.php?action=list&member_id=${this.memberId}`);
     if (!res.ok) return;
+    const orders = res.data.orders || [];
 
-    // Build coach history from orders + assignments perspective
     const stmt = await API.get(`/api/members.php?action=get&id=${this.memberId}`);
     const assignments = stmt.ok ? stmt.data.member.current_coaches : [];
 
-    // Get all coach assignments via logs
-    const logRes = await API.get(`/api/logs.php?action=list&member_id=${this.memberId}`);
-    const coachLogs = logRes.ok
-      ? logRes.data.logs.filter(l => l.action === 'coach_assigned' || l.action === 'coach_change')
-      : [];
+    // Derive change events from orders (sorted ASC by start_date, id)
+    const ordersAsc = [...orders]
+      .filter(o => o.coach_id)
+      .sort((a, b) => (a.start_date || '').localeCompare(b.start_date || '') || (a.id - b.id));
+
+    const events = [];
+    let prev = null;
+    for (const o of ordersAsc) {
+      if (prev === null) {
+        events.push({ date: o.start_date, type: 'assigned', newCoach: o.coach_name, product: o.product_name });
+      } else if (prev.coach_id !== o.coach_id) {
+        events.push({ date: o.start_date, type: 'changed', oldCoach: prev.coach_name, newCoach: o.coach_name, product: o.product_name });
+      }
+      prev = o;
+    }
+    events.reverse(); // newest first
 
     document.getElementById('tabContent').innerHTML = `
       <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">현재 담당 코치</h3>
@@ -335,19 +346,20 @@ App.registerPage('member-chart', {
           ).join('')}</div>`
       }
       <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">변경 이력</h3>
-      ${coachLogs.length === 0 ? '<div class="empty-state">코치 변경 이력이 없습니다</div>' : `
+      ${events.length === 0 ? '<div class="empty-state">코치 변경 이력이 없습니다</div>' : `
         <table class="data-table">
-          <thead><tr><th>일시</th><th>변경 내용</th><th>변경자</th></tr></thead>
+          <thead><tr><th>일자</th><th>변경 내용</th><th>관련 상품</th></tr></thead>
           <tbody>
-            ${coachLogs.map(l => {
-              const oldVal = JSON.parse(l.old_value || '{}');
-              const newVal = JSON.parse(l.new_value || '{}');
-              return `<tr>
-                <td style="font-size:12px;color:var(--text-secondary)">${UI.formatDate(l.created_at)}</td>
-                <td>${l.action === 'coach_assigned' ? '코치 배정' : '코치 변경'}: ${UI.esc(JSON.stringify(newVal))}</td>
-                <td style="font-size:12px">${UI.esc(l.actor_name || l.actor_type)}</td>
-              </tr>`;
-            }).join('')}
+            ${events.map(e => `
+              <tr>
+                <td style="font-size:12px;color:var(--text-secondary)">${UI.esc(e.date)}</td>
+                <td>${e.type === 'assigned'
+                  ? `<span class="badge badge-active">${UI.esc(e.newCoach)}</span> 최초 배정`
+                  : `<span class="badge badge-inactive">${UI.esc(e.oldCoach)}</span> → <span class="badge badge-active">${UI.esc(e.newCoach)}</span>`
+                }</td>
+                <td style="font-size:12px;color:var(--text-secondary)">${UI.esc(e.product) || '-'}</td>
+              </tr>
+            `).join('')}
           </tbody>
         </table>
       `}

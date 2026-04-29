@@ -13,8 +13,8 @@ switch ($action) {
     case 'list':
         $stmt = $db->query("
             SELECT c.*,
-              (SELECT COUNT(*) FROM coach_assignments ca
-               WHERE ca.coach_id = c.id AND ca.released_at IS NULL) AS current_count
+              (SELECT COUNT(DISTINCT o.member_id) FROM orders o
+               WHERE o.coach_id = c.id AND o.status = '진행중') AS current_count
             FROM coaches c
             ORDER BY c.status ASC, c.coach_name ASC
         ");
@@ -105,8 +105,8 @@ switch ($action) {
     case 'delete':
         $id = (int)($_GET['id'] ?? 0);
         if (!$id) jsonError('ID가 필요합니다');
-        // Check for active assignments
-        $stmt = $db->prepare("SELECT COUNT(*) FROM coach_assignments WHERE coach_id = ? AND released_at IS NULL");
+        // Block delete if any 진행중 order is assigned to this coach
+        $stmt = $db->prepare("SELECT COUNT(*) FROM orders WHERE coach_id = ? AND status = '진행중'");
         $stmt->execute([$id]);
         if ($stmt->fetchColumn() > 0) {
             jsonError('현재 담당 회원이 있는 코치는 삭제할 수 없습니다');

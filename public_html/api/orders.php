@@ -16,7 +16,7 @@ switch ($action) {
 
         // Coach access check
         if ($user['role'] === 'coach') {
-            $stmt = $db->prepare("SELECT 1 FROM coach_assignments WHERE member_id = ? AND coach_id = ? AND released_at IS NULL");
+            $stmt = $db->prepare("SELECT 1 FROM orders WHERE member_id = ? AND coach_id = ? LIMIT 1");
             $stmt->execute([$memberId, $user['id']]);
             if (!$stmt->fetch()) jsonError('접근 권한이 없습니다', 403);
         }
@@ -50,7 +50,7 @@ switch ($action) {
 
         // Coach access check
         if ($user['role'] === 'coach') {
-            $stmt = $db->prepare("SELECT 1 FROM coach_assignments WHERE member_id = ? AND coach_id = ? AND released_at IS NULL");
+            $stmt = $db->prepare("SELECT 1 FROM orders WHERE member_id = ? AND coach_id = ? LIMIT 1");
             $stmt->execute([$order['member_id'], $user['id']]);
             if (!$stmt->fetch()) jsonError('접근 권한이 없습니다', 403);
         }
@@ -104,11 +104,8 @@ switch ($action) {
             }
         }
 
-        // If coach assigned, create coach_assignment
         if ($coachId) {
-            $db->prepare("INSERT INTO coach_assignments (member_id, coach_id, order_id) VALUES (?, ?, ?)")
-                ->execute([$memberId, $coachId, $orderId]);
-            logChange($db, 'coach_assignment', $orderId, 'coach_assigned',
+            logChange($db, 'order', $orderId, 'coach_assigned',
                 null, ['coach_id' => $coachId], $user['role'], $user['id']);
         }
 
@@ -128,7 +125,7 @@ switch ($action) {
 
         // Coach can only update status
         if ($user['role'] === 'coach') {
-            $stmt = $db->prepare("SELECT 1 FROM coach_assignments WHERE member_id = ? AND coach_id = ? AND released_at IS NULL");
+            $stmt = $db->prepare("SELECT 1 FROM orders WHERE member_id = ? AND coach_id = ? LIMIT 1");
             $stmt->execute([$oldOrder['member_id'], $user['id']]);
             if (!$stmt->fetch()) jsonError('접근 권한이 없습니다', 403);
 
@@ -161,17 +158,8 @@ switch ($action) {
             $db->prepare("UPDATE orders SET " . implode(', ', $fields) . " WHERE id = ?")->execute($params);
         }
 
-        // Handle coach change in coach_assignments
         if ($coachChanged) {
-            // Release old assignment
-            $db->prepare("UPDATE coach_assignments SET released_at = NOW(), reason = '코치 변경'
-                WHERE order_id = ? AND released_at IS NULL")->execute([$id]);
-            // Create new assignment
-            if ($newCoachId) {
-                $db->prepare("INSERT INTO coach_assignments (member_id, coach_id, order_id) VALUES (?, ?, ?)")
-                    ->execute([$oldOrder['member_id'], $newCoachId, $id]);
-            }
-            logChange($db, 'coach_assignment', $id, 'coach_change',
+            logChange($db, 'order', $id, 'coach_change',
                 ['coach_id' => $oldOrder['coach_id']], ['coach_id' => $newCoachId],
                 $user['role'], $user['id']);
         }
@@ -190,8 +178,6 @@ switch ($action) {
         if ($user['role'] !== 'admin') jsonError('권한이 없습니다', 403);
         $id = (int)($_GET['id'] ?? 0);
         if (!$id) jsonError('ID가 필요합니다');
-        // Release coach assignments
-        $db->prepare("UPDATE coach_assignments SET released_at = NOW(), reason = '주문 삭제' WHERE order_id = ? AND released_at IS NULL")->execute([$id]);
         $db->prepare("DELETE FROM orders WHERE id = ?")->execute([$id]);
         jsonSuccess([], 'PT 이력이 삭제되었습니다');
 
@@ -211,7 +197,7 @@ switch ($action) {
 
         // Coach access check
         if ($user['role'] === 'coach') {
-            $stmt = $db->prepare("SELECT 1 FROM coach_assignments WHERE member_id = ? AND coach_id = ? AND released_at IS NULL");
+            $stmt = $db->prepare("SELECT 1 FROM orders WHERE member_id = ? AND coach_id = ? LIMIT 1");
             $stmt->execute([$session['member_id'], $user['id']]);
             if (!$stmt->fetch()) jsonError('접근 권한이 없습니다', 403);
         }
