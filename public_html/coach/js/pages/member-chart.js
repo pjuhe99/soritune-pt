@@ -156,6 +156,22 @@ CoachApp.registerPage('member-chart', {
       `).join('');
   },
 
+  ACTION_LABELS: {
+    auto_match_complete: '자동 매칭완료',
+    auto_in_progress: '자동 진행중 전환',
+    auto_terminate: '기간/회차 만료 자동 종료',
+    auto_revert_to_pending: '코치 해제로 매칭대기 복귀',
+  },
+
+  formatActor(l) {
+    const name = l.actor_name || l.actor_type;
+    return name === 'system' ? '시스템 자동' : name;
+  },
+
+  formatAction(action) {
+    return this.ACTION_LABELS[action] || action;
+  },
+
   async loadLogs() {
     document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===3));
     const res = await API.get(`/api/logs.php?action=list&member_id=${this.memberId}`);
@@ -165,7 +181,7 @@ CoachApp.registerPage('member-chart', {
       ? '<div class="empty-state">변경 이력이 없습니다</div>'
       : `<table class="data-table"><thead><tr><th>일시</th><th>변경</th><th>변경자</th></tr></thead><tbody>
           ${logs.map(l => `<tr><td style="font-size:11px;color:var(--text-secondary)">${UI.esc(l.created_at)}</td>
-          <td style="font-size:12px">${UI.esc(l.action)}</td><td style="font-size:12px">${UI.esc(l.actor_name||l.actor_type)}</td></tr>`).join('')}
+          <td style="font-size:12px">${UI.esc(this.formatAction(l.action))}</td><td style="font-size:12px">${UI.esc(this.formatActor(l))}</td></tr>`).join('')}
         </tbody></table>`;
   },
 });

@@ -508,6 +508,22 @@ App.registerPage('member-chart', {
     if (res.ok) this.switchTab('notes'); else alert(res.message);
   },
 
+  ACTION_LABELS: {
+    auto_match_complete: '자동 매칭완료',
+    auto_in_progress: '자동 진행중 전환',
+    auto_terminate: '기간/회차 만료 자동 종료',
+    auto_revert_to_pending: '코치 해제로 매칭대기 복귀',
+  },
+
+  formatActor(l) {
+    const name = l.actor_name || l.actor_type;
+    return name === 'system' ? '시스템 자동' : name;
+  },
+
+  formatAction(action) {
+    return this.ACTION_LABELS[action] || action;
+  },
+
   async loadLogs() {
     const res = await API.get(`/api/logs.php?action=list&member_id=${this.memberId}`);
     if (!res.ok) return;
@@ -522,10 +538,10 @@ App.registerPage('member-chart', {
               <tr>
                 <td style="font-size:11px;color:var(--text-secondary);white-space:nowrap">${UI.esc(l.created_at)}</td>
                 <td style="font-size:12px">${UI.esc(l.target_type)}</td>
-                <td style="font-size:12px">${UI.esc(l.action)}</td>
+                <td style="font-size:12px">${UI.esc(this.formatAction(l.action))}</td>
                 <td style="font-size:11px;color:var(--text-secondary);max-width:150px;overflow:hidden;text-overflow:ellipsis">${UI.esc(l.old_value) || '-'}</td>
                 <td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis">${UI.esc(l.new_value) || '-'}</td>
-                <td style="font-size:12px">${UI.esc(l.actor_name || l.actor_type)}</td>
+                <td style="font-size:12px">${UI.esc(this.formatActor(l))}</td>
               </tr>
             `).join('')}
           </tbody>
