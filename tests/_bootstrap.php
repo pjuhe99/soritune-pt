@@ -72,8 +72,9 @@ function t_make_order(PDO $db, array $opts): int
         'used_sessions'  => 0,
     ], $opts);
 
-    $db->prepare("INSERT INTO members (name, phone) VALUES (?, ?)")
-       ->execute(['테스트회원_' . uniqid(), '01000000000']);
+    $uniq = uniqid();
+    $db->prepare("INSERT INTO members (soritune_id, name, phone) VALUES (?, ?, ?)")
+       ->execute(['test_' . $uniq, '테스트회원_' . $uniq, '01000000000']);
     $memberId = (int)$db->lastInsertId();
 
     $db->prepare("

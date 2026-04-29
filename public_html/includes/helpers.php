@@ -209,7 +209,78 @@ function recomputeOrderStatus(
     ?string $today = null,
     bool $allowRevertTerminated = false
 ): ?string {
-    throw new RuntimeException('recomputeOrderStatus: not implemented');
+    $today ??= date('Y-m-d');
+
+    $stmt = $db->prepare("
+        SELECT id, coach_id, status, product_type, start_date, end_date, total_sessions
+          FROM orders
+         WHERE id = ?
+    ");
+    $stmt->execute([$orderId]);
+    $row = $stmt->fetch();
+    if (!$row) {
+        return null;
+    }
+
+    if (in_array($row['status'], ['연기', '중단', '환불'], true)) {
+        return null;
+    }
+    if ($row['status'] === '종료' && !$allowRevertTerminated) {
+        return null;
+    }
+
+    if ($row['coach_id'] === null) {
+        $newStatus = '매칭대기';
+    } else {
+        $terminated = false;
+        if ($row['end_date'] !== null && $today > $row['end_date']) {
+            $terminated = true;
+        }
+        if ($row['product_type'] === 'count'
+            && (int)($row['total_sessions'] ?? 0) > 0
+        ) {
+            $usedStmt = $db->prepare("
+                SELECT COUNT(*) FROM order_sessions
+                 WHERE order_id = ? AND completed_at IS NOT NULL
+            ");
+            $usedStmt->execute([$orderId]);
+            $used = (int)$usedStmt->fetchColumn();
+            if ($used >= (int)$row['total_sessions']) {
+                $terminated = true;
+            }
+        }
+        if ($terminated) {
+            $newStatus = '종료';
+        } elseif ($row['start_date'] !== null && $today >= $row['start_date']) {
+            $newStatus = '진행중';
+        } else {
+            $newStatus = '매칭완료';
+        }
+    }
+
+    if ($newStatus === $row['status']) {
+        return null;
+    }
+
+    $action = match (true) {
+        $newStatus === '매칭완료' => 'auto_match_complete',
+        $newStatus === '진행중'  => 'auto_in_progress',
+        $newStatus === '종료'    => 'auto_terminate',
+        $newStatus === '매칭대기' => 'auto_revert_to_pending',
+        default                  => 'auto_status_change',
+    };
+
+    $db->prepare("UPDATE orders SET status = ?, updated_at = NOW() WHERE id = ?")
+       ->execute([$newStatus, $orderId]);
+
+    logChange(
+        $db, 'order', $orderId, $action,
+        ['status' => $row['status']],
+        ['status' => $newStatus],
+        'system', 0
+    );
+
+    return $newStatus;
 }
 
 /**
