@@ -160,7 +160,7 @@ function getMemberDisplayStatus(PDO $db, int $memberId): string
  * @param string $action      Action label: create|update|delete|status_change|etc
  * @param mixed  $oldValue    Previous value (will be JSON-encoded); null if new record
  * @param mixed  $newValue    New value (will be JSON-encoded); null if deleted
- * @param string $actorType   'admin' or 'coach'
+ * @param string $actorType   'admin', 'coach', or 'system'
  * @param int    $actorId     ID of the acting user
  */
 function logChange(
@@ -188,4 +188,53 @@ function logChange(
         ':actor_type'  => $actorType,
         ':actor_id'    => $actorId,
     ]);
+}
+
+/**
+ * Recompute a single order's status by the decision tree, updating it if needed.
+ * Caller MUST hold a FOR UPDATE row lock and manage the transaction —
+ * this function does NOT call BEGIN/COMMIT.
+ *
+ * @param PDO      $db
+ * @param int      $orderId
+ * @param string   $today                  YYYY-MM-DD. Defaults to date('Y-m-d').
+ * @param bool     $allowRevertTerminated  When true, status='종료' rows also pass the
+ *                                          protection cut (used only by complete_session).
+ *                                          '연기/중단/환불' are always protected regardless.
+ * @return string|null                      The new status if changed; null otherwise (or if order missing).
+ */
+function recomputeOrderStatus(
+    PDO $db,
+    int $orderId,
+    ?string $today = null,
+    bool $allowRevertTerminated = false
+): ?string {
+    throw new RuntimeException('recomputeOrderStatus: not implemented');
+}
+
+/**
+ * Helper for callers without an active transaction: opens BEGIN, locks the order
+ * row FOR UPDATE, runs the callback (which typically calls recomputeOrderStatus),
+ * then COMMITs. ROLLBACK on exception.
+ *
+ * @throws RuntimeException If the caller already has an active transaction.
+ */
+function withOrderLock(PDO $db, int $orderId, callable $fn): mixed
+{
+    if ($db->inTransaction()) {
+        throw new RuntimeException(
+            'withOrderLock() must not be called inside an active transaction. ' .
+            'Use SELECT ... FOR UPDATE + recomputeOrderStatus() directly instead.'
+        );
+    }
+    $db->beginTransaction();
+    try {
+        $db->prepare('SELECT id FROM orders WHERE id = ? FOR UPDATE')->execute([$orderId]);
+        $result = $fn();
+        $db->commit();
+        return $result;
+    } catch (Throwable $e) {
+        $db->rollBack();
+        throw $e;
+    }
 }
