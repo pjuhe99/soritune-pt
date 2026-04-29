@@ -227,3 +227,38 @@ $db->prepare("SELECT id FROM orders WHERE id=? FOR UPDATE")->execute([$id]);
 $result = recomputeOrderStatus($db, $id);
 t_assert_eq('진행중', $result, '패턴 B: 트랜잭션 내 직접 호출 정상');
 $db->rollBack();
+
+t_section('matching confirm — 통합 시나리오');
+
+$activeCoach = $db->query("SELECT id FROM coaches WHERE status='active' LIMIT 1")->fetchColumn();
+
+if (!$activeCoach) {
+    echo "  SKIP  활성 코치가 DB에 없어 통합 smoke 생략\n";
+} else {
+    // confirm 시뮬레이션: coach_id 만 UPDATE 후 recompute
+    $db->beginTransaction();
+    $id = t_make_order($db, [
+        'coach_id'   => null,
+        'start_date' => date('Y-m-d', strtotime('+5 days')),
+        'end_date'   => date('Y-m-d', strtotime('+30 days')),
+        'status'     => '매칭대기',
+    ]);
+    $db->prepare("SELECT id FROM orders WHERE id=? FOR UPDATE")->execute([$id]);
+    $db->prepare("UPDATE orders SET coach_id=? WHERE id=?")->execute([(int)$activeCoach, $id]);
+    $newStatus = recomputeOrderStatus($db, $id);
+    t_assert_eq('매칭완료', $newStatus, 'confirm 시뮬레이션 — start 미래 → 매칭완료');
+    $db->rollBack();
+
+    $db->beginTransaction();
+    $id = t_make_order($db, [
+        'coach_id'   => null,
+        'start_date' => date('Y-m-d', strtotime('-5 days')),
+        'end_date'   => date('Y-m-d', strtotime('+30 days')),
+        'status'     => '매칭대기',
+    ]);
+    $db->prepare("SELECT id FROM orders WHERE id=? FOR UPDATE")->execute([$id]);
+    $db->prepare("UPDATE orders SET coach_id=? WHERE id=?")->execute([(int)$activeCoach, $id]);
+    $newStatus = recomputeOrderStatus($db, $id);
+    t_assert_eq('진행중', $newStatus, 'confirm 시뮬레이션 — start 이미 지남 → 진행중');
+    $db->rollBack();
+}

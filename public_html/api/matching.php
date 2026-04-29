@@ -337,7 +337,8 @@ function _actionConfirm(PDO $db, array $admin): void {
 
     $db->beginTransaction();
     try {
-        $updOrder    = $db->prepare("UPDATE orders SET coach_id = ?, status = '매칭완료' WHERE id = ?");
+        $lockOrder   = $db->prepare("SELECT id FROM orders WHERE id = ? FOR UPDATE");
+        $updOrder    = $db->prepare("UPDATE orders SET coach_id = ? WHERE id = ?");
         $insAssign   = $db->prepare("
             INSERT INTO coach_assignments (member_id, coach_id, order_id, assigned_at, reason)
             VALUES (?, ?, ?, NOW(), ?)
@@ -348,7 +349,10 @@ function _actionConfirm(PDO $db, array $admin): void {
         ");
 
         foreach ($matched as $m) {
-            $updOrder->execute([(int)$m['proposed_coach_id'], (int)$m['order_id']]);
+            $orderId = (int)$m['order_id'];
+            $lockOrder->execute([$orderId]);
+            $updOrder->execute([(int)$m['proposed_coach_id'], $orderId]);
+            recomputeOrderStatus($db, $orderId);
 
             $reasonLabel = match ($m['source']) {
                 'previous_coach'   => 'auto_match:previous_coach',
