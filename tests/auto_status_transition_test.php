@@ -295,3 +295,31 @@ if ($activeCoach) {
     t_assert_eq('진행중', $after, 'update 후크 스킵 시 status 보존');
     $db->rollBack();
 }
+
+t_section('complete_session 토글 — 자동 종료 후 취소로 진행중 복귀 (단위)');
+
+if ($activeCoach) {
+    $db->beginTransaction();
+    // 1. count 5회 / 5회 완료 / status 종료 (=auto_terminate 결과로 가정)
+    $orderId = t_make_order($db, [
+        'product_type'   => 'count',
+        'coach_id'       => (int)$activeCoach,
+        'start_date'     => date('Y-m-d', strtotime('-30 days')),
+        'end_date'       => date('Y-m-d', strtotime('+30 days')),
+        'total_sessions' => 5,
+        'used_sessions'  => 5,
+        'status'         => '종료',
+    ]);
+
+    // 2. 마지막 회차 완료 취소
+    $db->prepare("
+        UPDATE order_sessions SET completed_at = NULL
+         WHERE order_id = ? AND session_number = 5
+    ")->execute([$orderId]);
+
+    // 3. complete_session 후크 시뮬레이션 — allowRevertTerminated=true
+    $db->prepare("SELECT id FROM orders WHERE id=? FOR UPDATE")->execute([$orderId]);
+    $newStatus = recomputeOrderStatus($db, $orderId, null, true);
+    t_assert_eq('진행중', $newStatus, '자동 종료 + 회차 취소 → 진행중 복귀');
+    $db->rollBack();
+}

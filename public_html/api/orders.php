@@ -214,11 +214,19 @@ switch ($action) {
         // Toggle completion
         if ($session['completed_at']) {
             $db->prepare("UPDATE order_sessions SET completed_at = NULL WHERE id = ?")->execute([$sessionId]);
-            jsonSuccess(['completed' => false], '회차 완료가 취소되었습니다');
+            $newCompleted = false;
+            $msg = '회차 완료가 취소되었습니다';
         } else {
             $db->prepare("UPDATE order_sessions SET completed_at = NOW() WHERE id = ?")->execute([$sessionId]);
-            jsonSuccess(['completed' => true], '회차가 완료 처리되었습니다');
+            $newCompleted = true;
+            $msg = '회차가 완료 처리되었습니다';
         }
+
+        // 자동 status 재평가 (자동 종료된 order의 회차 취소 시 진행중 복귀 위해 allowRevertTerminated=true)
+        $orderId = (int)$session['order_id'];
+        withOrderLock($db, $orderId, fn() => recomputeOrderStatus($db, $orderId, null, true));
+
+        jsonSuccess(['completed' => $newCompleted], $msg);
 
     case 'active':
         // Get active (진행중) orders for a member — used for PT progress section
