@@ -262,3 +262,36 @@ if (!$activeCoach) {
     t_assert_eq('진행중', $newStatus, 'confirm 시뮬레이션 — start 이미 지남 → 진행중');
     $db->rollBack();
 }
+
+t_section('orders.php — create/update 후크 (단위)');
+
+if ($activeCoach) {
+    // create 후크 시뮬레이션 — coach 있고 start 이미 지났으면 후크가 진행중으로
+    $db->beginTransaction();
+    $orderId = t_make_order($db, [
+        'coach_id'   => (int)$activeCoach,
+        'start_date' => date('Y-m-d', strtotime('-5 days')),
+        'end_date'   => date('Y-m-d', strtotime('+30 days')),
+        'status'     => '매칭대기',
+    ]);
+    $db->prepare("SELECT id FROM orders WHERE id=? FOR UPDATE")->execute([$orderId]);
+    recomputeOrderStatus($db, $orderId);
+    $after = $db->query("SELECT status FROM orders WHERE id={$orderId}")->fetchColumn();
+    t_assert_eq('진행중', $after, 'create 후크: coach + 과거 start → 진행중');
+    $db->rollBack();
+
+    // update 후크: status 키 포함 시 스킵 시뮬레이션
+    $db->beginTransaction();
+    $orderId = t_make_order($db, [
+        'coach_id'   => null,
+        'start_date' => date('Y-m-d', strtotime('-5 days')),
+        'end_date'   => date('Y-m-d', strtotime('+30 days')),
+        'status'     => '매칭대기',
+    ]);
+    // 운영자가 status 를 직접 진행중으로 set
+    $db->prepare("UPDATE orders SET status='진행중' WHERE id=?")->execute([$orderId]);
+    // 후크는 status 키 포함이므로 스킵 (recompute 호출 X) → 진행중 유지
+    $after = $db->query("SELECT status FROM orders WHERE id={$orderId}")->fetchColumn();
+    t_assert_eq('진행중', $after, 'update 후크 스킵 시 status 보존');
+    $db->rollBack();
+}

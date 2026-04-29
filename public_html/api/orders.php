@@ -109,6 +109,9 @@ switch ($action) {
                 null, ['coach_id' => $coachId], $user['role'], $user['id']);
         }
 
+        $db->prepare("SELECT id FROM orders WHERE id = ? FOR UPDATE")->execute([$orderId]);
+        recomputeOrderStatus($db, $orderId);
+
         $db->commit();
         jsonSuccess(['id' => $orderId], 'PT 이력이 추가되었습니다');
 
@@ -169,6 +172,12 @@ switch ($action) {
             logChange($db, 'order', $id, 'status_change',
                 ['status' => $oldOrder['status']], ['status' => $input['status']],
                 $user['role'], $user['id']);
+        }
+
+        // 자동 status 재평가 — 사람이 명시적으로 status 를 보낸 경우 스킵
+        if (!array_key_exists('status', $input)) {
+            $db->prepare("SELECT id FROM orders WHERE id = ? FOR UPDATE")->execute([$id]);
+            recomputeOrderStatus($db, $id);
         }
 
         $db->commit();
