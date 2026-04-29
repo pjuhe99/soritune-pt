@@ -2,5 +2,6 @@
 uploads/imports/*
 !uploads/imports/.gitkeep
 logs/*.log
+cron/logs/*.log
 keys/*
 !keys/.gitkeep
