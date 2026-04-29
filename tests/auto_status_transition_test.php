@@ -203,3 +203,27 @@ t_assert_eq(0, (int)($log['actor_id'] ?? -1), 'log actor_id = 0');
 t_assert_eq('{"status":"매칭완료"}', $log['old_value'] ?? null, 'log old_value JSON');
 t_assert_eq('{"status":"진행중"}', $log['new_value'] ?? null, 'log new_value JSON');
 $db->rollBack();
+
+t_section('withOrderLock — 트랜잭션 모델 가드');
+
+// 가드: 활성 트랜잭션 안에서 호출 시 RuntimeException
+$db->beginTransaction();
+t_assert_throws(
+    fn() => withOrderLock($db, 1, fn() => null),
+    RuntimeException::class,
+    '활성 트랜잭션 내 withOrderLock 호출 → RuntimeException'
+);
+$db->rollBack();
+
+// 패턴 B: 활성 트랜잭션 내에서 직접 SELECT FOR UPDATE + recompute 호출
+$db->beginTransaction();
+$id = t_make_order($db, [
+    'coach_id'   => 1,
+    'start_date' => date('Y-m-d', strtotime('-5 days')),
+    'end_date'   => date('Y-m-d', strtotime('+30 days')),
+    'status'     => '매칭완료',
+]);
+$db->prepare("SELECT id FROM orders WHERE id=? FOR UPDATE")->execute([$id]);
+$result = recomputeOrderStatus($db, $id);
+t_assert_eq('진행중', $result, '패턴 B: 트랜잭션 내 직접 호출 정상');
+$db->rollBack();
