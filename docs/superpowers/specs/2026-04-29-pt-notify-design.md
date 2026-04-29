@@ -116,10 +116,10 @@ CREATE TABLE notify_member_match_log (
 | 신규 경로 | 출처 | 역할 |
 |-----------|------|------|
 | `public_html/cron/GoogleSheets.php` | boot | Sheets API readonly 클라이언트 |
-| `public_html/includes/notify/dispatcher.php` | boot | 디스패처 (수정 없음) |
+| `public_html/includes/notify/dispatcher.php` | boot 베이스 | 디스패처. boot 파일 복사 후 source 타입 match 표현식(302~307줄 부근)에 `'pt_sheet_member' => notifySourcePtSheetMember(...)` 1줄 + 상단 require_once 1줄 추가. boot의 `requireAdmin(NOTIFY_ROLES)` 호출 시그니처 차이는 dispatcher 내부에서는 발생 안 함(role 검증은 API 레이어) |
 | `public_html/includes/notify/solapi_client.php` | boot | Solapi HTTP 클라이언트 |
 | `public_html/includes/notify/notify_functions.php` | boot | 공통 유틸 |
-| `public_html/includes/notify/scenario_registry.php` | boot 베이스 | 시나리오 키 → 파일 매핑. boot 파일 복사 후 source 타입 디스패치 테이블에 `'pt_sheet_member' => 'source_pt_sheet_member.php'` 1줄 추가 (이 한 줄을 위해 "변경 없이 복사"가 아닌 "PT 수정 1줄"로 분류) |
+| `public_html/includes/notify/scenario_registry.php` | boot | 시나리오 자동 로드 + 검증. 변경 없이 복사 |
 | `public_html/includes/notify/source_google_sheet.php` | boot | (방식 1에서는 import만 됨, 직접 호출 안 됨) |
 | `keys/solapi.json` | boot 키 동일 | apache:apache 0640 |
 | `keys/google-sheets-service-account.json` | boot 키 동일 | apache:apache 0640 |
@@ -129,10 +129,11 @@ CREATE TABLE notify_member_match_log (
 |------|------|
 | `public_html/includes/notify/source_pt_sheet_member.php` | ★ 새 어댑터. 시트 + PT DB lookup + merged_into 추적 + match log 기록 |
 | `public_html/includes/notify/scenarios/.gitkeep` | 빈 디렉토리 마커 |
-| `public_html/api/services/notify.php` | boot 거 베이스로 복사 + 매칭 실패 override 엔드포인트 추가 |
-| `public_html/admin/notify.php` | ★ 새 admin 페이지. boot `operation/index.php`의 notify 섹션을 PT admin 톤으로 |
-| `public_html/assets/css/notify.css` | boot `css/notify.css` 복사 + PT 스타일 톤 일치 |
-| `public_html/assets/js/notify.js` | boot `js/notify.js` 복사 + override 토글/test_phone 입력 추가 |
+| `public_html/api/services/notify.php` | boot 거 베이스로 복사. PT auth 시그니처(`requireAdmin()` 인자 없음)로 교체. NOTIFY_ROLES 상수/role 인자 제거 (PT는 단일 admin role). 7개 handler 함수 본체 (실제 라우팅은 위의 `api/notify.php`가 담당) |
+| `public_html/admin/index.php` | (수정) sidebar nav에 `<a data-page="notify">알림톡</a>` 1줄 + `<script src="/admin/js/pages/notify.js"></script>` 1줄 추가 |
+| `public_html/admin/js/pages/notify.js` | ★ 새 SPA 페이지 모듈. PT admin SPA 패턴 (App.init() 라우팅) 준수. boot `operation/index.php`의 notify 섹션 로직을 SPA 모듈 함수로 변환 |
+| `public_html/api/notify.php` | ★ 새 API 라우터. PT 단일 라우터 패턴 (`?action=`로 switch 분기), 7개 액션(listScenarios/toggle/preview/sendNow/listBatches/batchDetail/retryFailed) 처리. handler 본체는 `services/notify.php`에 둠 |
+| `public_html/assets/css/notify.css` | boot `css/notify.css` 베이스 + PT 톤(이미 로드된 `/assets/css/style.css`와 충돌 안 나는 클래스 prefix `notify-` 사용). admin/index.php의 head에 link 추가 |
 | `public_html/cron/notify_dispatch.php` | ★ 신규. crontab에서 호출, 활성 시나리오 일괄 디스패치 |
 | `migrations/20260429_add_notify_tables.sql` | 4개 테이블 생성 (boot SQL 그대로) |
 | `migrations/20260429_add_notify_bypass_columns.sql` | bypass 컬럼 추가 |
