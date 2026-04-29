@@ -150,6 +150,7 @@ switch ($action) {
         $headers = array_map('trim', fgetcsv($handle, 0, $delimiter));
 
         $stats = ['success' => 0, 'skipped' => 0, 'error' => 0];
+        $insertedIds = [];
         $rowNum = 1;
 
         while (($raw = fgetcsv($handle, 0, $delimiter)) !== false) {
@@ -246,8 +247,18 @@ switch ($action) {
                 VALUES (?, 'spreadsheet', ?, 'orders', ?, 'success', ?)")
                 ->execute([$batchId, $rowNum, $orderId, '주문 생성']);
             $stats['success']++;
+            $insertedIds[] = $orderId;
         }
         fclose($handle);
+
+        // 임포트 완료 후 자동 status 재평가 — 단일 row 실패가 응답을 막지 않도록 try/catch
+        foreach ($insertedIds as $oid) {
+            try {
+                withOrderLock($db, (int)$oid, fn() => recomputeOrderStatus($db, (int)$oid));
+            } catch (Throwable $e) {
+                error_log("auto_status_transition after import: order={$oid} err=" . $e->getMessage());
+            }
+        }
 
         jsonSuccess(['stats' => $stats], "처리 완료: 성공 {$stats['success']} / 스킵 {$stats['skipped']} / 에러 {$stats['error']}");
 
