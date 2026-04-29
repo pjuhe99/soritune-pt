@@ -11,6 +11,7 @@ $isLoggedIn = $user && $user['role'] === 'admin';
 <title>SoriTune PT — Admin</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/assets/css/notify.css">
 </head>
 <body>
 
@@ -62,6 +63,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
       <a href="#import" data-page="import">데이터관리</a>
       <a href="#retention" data-page="retention">리텐션관리</a>
       <a href="#matching" data-page="matching">매칭관리</a>
+      <a href="#notify" data-page="notify">알림톡</a>
     </nav>
   </aside>
   <main class="main-content">
@@ -84,6 +86,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 <script src="/admin/js/pages/import.js"></script>
 <script src="/admin/js/pages/retention.js"></script>
 <script src="/admin/js/pages/matching.js"></script>
+<script src="/admin/js/pages/notify.js"></script>
 <script>App.init();</script>
 <?php endif; ?>
 
