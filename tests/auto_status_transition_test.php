@@ -123,3 +123,83 @@ $id = t_make_order($db, [
 ]);
 t_assert_eq('진행중', recomputeOrderStatus($db, $id), 'start 과거 + end 미래 → 진행중');
 $db->rollBack();
+
+t_section('allowRevertTerminated 플래그');
+
+$db->beginTransaction();
+$id = t_make_order($db, [
+    'coach_id'   => 1,
+    'start_date' => date('Y-m-d', strtotime('-5 days')),
+    'end_date'   => date('Y-m-d', strtotime('+30 days')),
+    'status'     => '종료',
+]);
+t_assert_eq(null, recomputeOrderStatus($db, $id, null, false), '기본 호출 — 종료 보호');
+$db->rollBack();
+
+$db->beginTransaction();
+$id = t_make_order($db, [
+    'coach_id'   => 1,
+    'start_date' => date('Y-m-d', strtotime('-5 days')),
+    'end_date'   => date('Y-m-d', strtotime('+30 days')),
+    'status'     => '종료',
+]);
+t_assert_eq('진행중', recomputeOrderStatus($db, $id, null, true), 'allowRevert=true + 회차 미소진 + 기간 안 지남 → 진행중');
+$db->rollBack();
+
+$db->beginTransaction();
+$id = t_make_order($db, ['status' => '연기', 'coach_id' => 1]);
+t_assert_eq(null, recomputeOrderStatus($db, $id, null, true), '연기는 플래그 무관하게 보호');
+$db->rollBack();
+
+t_section('엣지: order 미존재');
+
+t_assert_eq(null, recomputeOrderStatus(getDB(), 99999999), '미존재 id → null (예외 없음)');
+
+t_section('엣지: count + total_sessions NULL/0');
+
+$db->beginTransaction();
+$id = t_make_order($db, [
+    'product_type'   => 'count',
+    'coach_id'       => 1,
+    'start_date'     => date('Y-m-d', strtotime('-5 days')),
+    'end_date'       => date('Y-m-d', strtotime('+30 days')),
+    'total_sessions' => null,
+    'status'         => '매칭완료',
+]);
+t_assert_eq('진행중', recomputeOrderStatus($db, $id), 'count + total NULL + end 미래 → 진행중');
+$db->rollBack();
+
+$db->beginTransaction();
+$id = t_make_order($db, [
+    'product_type'   => 'count',
+    'coach_id'       => 1,
+    'start_date'     => date('Y-m-d', strtotime('-60 days')),
+    'end_date'       => date('Y-m-d', strtotime('-1 days')),
+    'total_sessions' => 0,
+    'status'         => '진행중',
+]);
+t_assert_eq('종료', recomputeOrderStatus($db, $id), 'count + total 0 + end 만료 → 종료 (기간 만료만)');
+$db->rollBack();
+
+t_section('change_logs 기록');
+
+$db->beginTransaction();
+$id = t_make_order($db, [
+    'coach_id'   => 1,
+    'start_date' => date('Y-m-d', strtotime('-5 days')),
+    'end_date'   => date('Y-m-d', strtotime('+30 days')),
+    'status'     => '매칭완료',
+]);
+recomputeOrderStatus($db, $id);
+$log = $db->query("
+    SELECT action, actor_type, actor_id, old_value, new_value
+      FROM change_logs
+     WHERE target_type='order' AND target_id={$id}
+     ORDER BY id DESC LIMIT 1
+")->fetch();
+t_assert_eq('auto_in_progress', $log['action'] ?? null, 'log action = auto_in_progress');
+t_assert_eq('system', $log['actor_type'] ?? null, 'log actor_type = system');
+t_assert_eq(0, (int)($log['actor_id'] ?? -1), 'log actor_id = 0');
+t_assert_eq('{"status":"매칭완료"}', $log['old_value'] ?? null, 'log old_value JSON');
+t_assert_eq('{"status":"진행중"}', $log['new_value'] ?? null, 'log new_value JSON');
+$db->rollBack();
