@@ -43,16 +43,20 @@ CREATE TABLE `coaches` (
   `hired_on` DATE DEFAULT NULL,
   `role` ENUM('신규 코치','일반 코치','리드 코치','코칭 마스터 코치','소리 마스터 코치') DEFAULT NULL,
   `evaluation` ENUM('pass','fail') DEFAULT NULL,
+  `team_leader_id` INT DEFAULT NULL,
   `status` ENUM('active','inactive') NOT NULL DEFAULT 'active',
   `available` TINYINT(1) NOT NULL DEFAULT 1,
   `max_capacity` INT NOT NULL DEFAULT 0,
   `memo` TEXT,
+  `kakao_room_url` VARCHAR(255) DEFAULT NULL,
   `overseas` TINYINT(1) NOT NULL DEFAULT 0,
   `side_job` TINYINT(1) NOT NULL DEFAULT 0,
   `soriblock_basic` TINYINT(1) NOT NULL DEFAULT 0,
   `soriblock_advanced` TINYINT(1) NOT NULL DEFAULT 0,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_team_leader` (`team_leader_id`),
+  CONSTRAINT `fk_coach_team_leader` FOREIGN KEY (`team_leader_id`) REFERENCES `coaches`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3. members (NO status, NO current_coach_id — derived at query time)
