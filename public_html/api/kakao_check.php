@@ -193,15 +193,15 @@ switch ($action) {
         $joined = !empty($input['joined']);
         if (!$orderId) jsonError('order_id가 필요합니다');
 
+        // 존재 확인 (양 role 공통)
+        $stmt = $db->prepare("SELECT coach_id FROM orders WHERE id = ?");
+        $stmt->execute([$orderId]);
+        $row = $stmt->fetch();
+        if (!$row) jsonError('order를 찾을 수 없습니다', 404);
+
         // 코치 권한: 본인 order만 (admin은 통과)
-        if ($user['role'] === 'coach') {
-            $stmt = $db->prepare("SELECT coach_id FROM orders WHERE id = ?");
-            $stmt->execute([$orderId]);
-            $row = $stmt->fetch();
-            if (!$row) jsonError('order를 찾을 수 없습니다', 404);
-            if ((int)$row['coach_id'] !== (int)$user['id']) {
-                jsonError('권한이 없습니다', 403);
-            }
+        if ($user['role'] === 'coach' && (int)$row['coach_id'] !== (int)$user['id']) {
+            jsonError('권한이 없습니다', 403);
         }
 
         kakaoCheckToggle($db, $orderId, $joined, $user['role'], (int)$user['id']);

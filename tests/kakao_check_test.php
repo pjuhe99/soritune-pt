@@ -206,3 +206,8 @@ if ($activeCoach === 0) {
 
     $db->rollBack();
 }
+
+t_section('toggle_join — non-existent order returns false');
+
+$changed = kakaoCheckToggle($db, 99999999, true, 'admin', 1);
+t_assert_eq(false, $changed, 'non-existent order_id → false (no exception)');
