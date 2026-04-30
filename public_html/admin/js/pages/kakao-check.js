@@ -244,23 +244,21 @@ App.registerPage('kakao-check', {
     this.renderBulkBar();
   },
 
-  // *** CORRECTION 3: also escape cohort in bulk bar dropdown options ***
   renderBulkBar() {
     const bar = document.getElementById('bulkActionBar');
     if (!bar) return;
     const n = this.selectedOrderIds.size;
     if (n === 0) { bar.innerHTML = ''; return; }
-    const cohortOptions = this.cohorts.map(c =>
-      `<option value="${UI.esc(c)}" ${c === this.bulkCohort ? 'selected' : ''}>${UI.esc(c)}</option>`
-    ).join('');
     bar.innerHTML = `
       <div style="position:sticky; bottom:0; background:var(--surface); border-top:1px solid var(--border); padding:12px;
                   display:flex; align-items:center; gap:12px; box-shadow:0 -2px 6px rgba(0,0,0,0.4); z-index:10;">
         <strong>${n}건 선택됨</strong>
-        <select class="filter-pill" onchange="App.pages['kakao-check'].setBulkCohort(this.value)">
-          <option value="">목적지 월 선택…</option>
-          ${cohortOptions}
-        </select>
+        <label style="display:inline-flex; align-items:center; gap:6px;">
+          목적지 월:
+          <input type="month" class="filter-pill" style="font-family:inherit;"
+                 value="${UI.esc(this.bulkCohort)}"
+                 onchange="App.pages['kakao-check'].setBulkCohort(this.value)">
+        </label>
         <button class="btn btn-primary btn-small" onclick="App.pages['kakao-check'].applyBulk()">적용</button>
         <button class="btn btn-outline btn-small" onclick="App.pages['kakao-check'].applyRestore()">원래대로(자동)</button>
         <button class="btn btn-outline btn-small" style="margin-left:auto;"
