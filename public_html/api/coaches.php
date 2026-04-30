@@ -109,7 +109,9 @@ switch ($action) {
         if (!$id) jsonError('ID가 필요합니다');
         $input = getJsonInput();
 
-        // 현재 상태 조회 (cascade 차단 판정용)
+        // 현재 상태 조회 (cascade 차단 판정용).
+        // SELECT~UPDATE 사이 다른 어드민의 변경에는 잠금하지 않음 — 어드민 인원/코치 수가 적은
+        // 운영 규모에서 TOCTOU 위험은 무시 가능. 규모 확장 시 SELECT ... FOR UPDATE 트랜잭션 필요.
         $cur = $db->prepare("SELECT id, status, team_leader_id FROM coaches WHERE id = ?");
         $cur->execute([$id]);
         $current = $cur->fetch();
@@ -132,6 +134,8 @@ switch ($action) {
                 try { assertCanModifyLeader($db, $id, 'inactive'); }
                 catch (RuntimeException $e) { jsonError($e->getMessage()); }
             }
+            // $teamLeaderIdAfter === null (e.g., {is_team_leader: false} with no team_leader_id key)도
+            // 팀장 해제로 간주되어 cascade-block 대상에 포함됨.
             if ($hasLeaderField && $teamLeaderIdAfter !== $id) {
                 try { assertCanModifyLeader($db, $id, 'unset_leader'); }
                 catch (RuntimeException $e) { jsonError($e->getMessage()); }
