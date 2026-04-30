@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/coach_team.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -41,12 +42,35 @@ switch ($action) {
 
         if (!$loginId || !$password || !$coachName) jsonError('필수 항목을 입력하세요');
 
-        $hash = password_hash($password, PASSWORD_BCRYPT);
-        $stmt = $db->prepare("INSERT INTO coaches
-            (login_id, password_hash, coach_name, korean_name, birthdate, hired_on, role, evaluation,
-             status, available, max_capacity, memo, overseas, side_job, soriblock_basic, soriblock_advanced)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        // 신규 필드 검증
         try {
+            $kakaoUrl = normalizeKakaoRoomUrl($input['kakao_room_url'] ?? null);
+        } catch (InvalidArgumentException $e) {
+            jsonError($e->getMessage());
+        }
+        $isLeader = !empty($input['is_team_leader']);
+        $teamLeaderIdInput = $isLeader ? null : (
+            isset($input['team_leader_id']) && $input['team_leader_id'] !== ''
+                ? (int)$input['team_leader_id'] : null
+        );
+        // self는 INSERT 후 알 수 있으므로 일단 입력값만 (타인 leader인 경우만 미리 검증 가능)
+        if ($teamLeaderIdInput !== null) {
+            try {
+                validateTeamLeaderId($db, 0, $teamLeaderIdInput);
+                // coachId=0은 self-체크 우회용. 타인 검증만 필요.
+            } catch (InvalidArgumentException $e) {
+                jsonError($e->getMessage());
+            }
+        }
+
+        $hash = password_hash($password, PASSWORD_BCRYPT);
+        $db->beginTransaction();
+        try {
+            $stmt = $db->prepare("INSERT INTO coaches
+                (login_id, password_hash, coach_name, korean_name, birthdate, hired_on, role, evaluation,
+                 team_leader_id, status, available, max_capacity, memo, kakao_room_url,
+                 overseas, side_job, soriblock_basic, soriblock_advanced)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([
                 $loginId, $hash, $coachName,
                 trim($input['korean_name'] ?? '') ?: null,
@@ -54,20 +78,30 @@ switch ($action) {
                 !empty($input['hired_on']) ? $input['hired_on'] : null,
                 !empty($input['role']) ? $input['role'] : null,
                 !empty($input['evaluation']) ? $input['evaluation'] : null,
+                $teamLeaderIdInput,
                 $input['status'] ?? 'active',
                 (int)($input['available'] ?? 1),
                 (int)($input['max_capacity'] ?? 0),
                 $input['memo'] ?? null,
+                $kakaoUrl,
                 (int)!empty($input['overseas']),
                 (int)!empty($input['side_job']),
                 (int)!empty($input['soriblock_basic']),
                 (int)!empty($input['soriblock_advanced']),
             ]);
+            $newId = (int)$db->lastInsertId();
+
+            // 본인이 팀장인 경우 self-ref 업데이트
+            if ($isLeader) {
+                $db->prepare("UPDATE coaches SET team_leader_id = id WHERE id = ?")->execute([$newId]);
+            }
+            $db->commit();
         } catch (PDOException $e) {
+            $db->rollBack();
             if ($e->getCode() == 23000) jsonError('이미 사용 중인 로그인 ID입니다');
             throw $e;
         }
-        jsonSuccess(['id' => (int)$db->lastInsertId()], '코치가 등록되었습니다');
+        jsonSuccess(['id' => $newId], '코치가 등록되었습니다');
 
     case 'update':
         $id = (int)($_GET['id'] ?? 0);
