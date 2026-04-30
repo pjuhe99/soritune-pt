@@ -102,9 +102,16 @@ App.registerPage('coaches', {
 
     const isLeader = isEdit && coach.team_leader_id != null
                      && Number(coach.team_leader_id) === Number(coach.id);
+    // 비활성이지만 현재 이 코치의 leader로 지정된 팀장은 옵션에 남겨야 함 (자동 미배정 방지)
     const leaderOptions = (this.coaches || [])
-      .filter(c => Number(c.team_leader_id) === Number(c.id) && c.status === 'active' && c.id !== coach.id)
-      .map(c => `<option value="${c.id}" ${Number(coach.team_leader_id) === Number(c.id) ? 'selected' : ''}>${UI.esc(c.coach_name)}팀 (${UI.esc(c.coach_name)})</option>`)
+      .filter(c => Number(c.team_leader_id) === Number(c.id)
+                && Number(c.id) !== Number(coach.id)
+                && (c.status === 'active' || Number(c.id) === Number(coach.team_leader_id)))
+      .map(c => {
+        const inactiveTag = c.status !== 'active' ? ' (비활성)' : '';
+        const sel = Number(coach.team_leader_id) === Number(c.id) ? 'selected' : '';
+        return `<option value="${c.id}" ${sel}>${UI.esc(c.coach_name)}팀${inactiveTag}</option>`;
+      })
       .join('');
 
     const chk = (name, label) => `
@@ -230,6 +237,7 @@ App.registerPage('coaches', {
       ['overseas','side_job','soriblock_basic','soriblock_advanced'].forEach(k => {
         body[k] = form.elements[k].checked ? 1 : 0;
       });
+      // is_team_leader/team_leader_id는 form.elements 직접 읽기 (FormData는 disabled select 누락)
       body.is_team_leader = form.elements.is_team_leader.checked ? 1 : 0;
       body.team_leader_id = body.is_team_leader
         ? null
