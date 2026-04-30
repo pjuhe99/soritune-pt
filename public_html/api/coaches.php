@@ -199,12 +199,23 @@ switch ($action) {
     case 'delete':
         $id = (int)($_GET['id'] ?? 0);
         if (!$id) jsonError('ID가 필요합니다');
-        // Block delete if any 진행중 order is assigned to this coach
+
+        // 진행중 회원 차단 (기존)
         $stmt = $db->prepare("SELECT COUNT(*) FROM orders WHERE coach_id = ? AND status = '진행중'");
         $stmt->execute([$id]);
         if ($stmt->fetchColumn() > 0) {
             jsonError('현재 담당 회원이 있는 코치는 삭제할 수 없습니다');
         }
+
+        // 팀원 있는 팀장 차단 (신규)
+        $cur = $db->prepare("SELECT id, team_leader_id FROM coaches WHERE id = ?");
+        $cur->execute([$id]);
+        $current = $cur->fetch();
+        if ($current && (int)$current['team_leader_id'] === (int)$current['id']) {
+            try { assertCanModifyLeader($db, $id, 'delete'); }
+            catch (RuntimeException $e) { jsonError($e->getMessage()); }
+        }
+
         $db->prepare("DELETE FROM coaches WHERE id = ?")->execute([$id]);
         jsonSuccess([], '코치가 삭제되었습니다');
 
