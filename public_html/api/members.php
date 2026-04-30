@@ -21,9 +21,9 @@ switch ($action) {
         $where = ["m.merged_into IS NULL"];
         $params = [];
 
-        // Coach role: only show assigned members (based on any order they coach for this member)
+        // Coach role: 현재 담당 중인 회원만 (진행중/매칭완료 status). 과거 종료된 PT는 제외.
         if ($user['role'] === 'coach') {
-            $where[] = "EXISTS (SELECT 1 FROM orders o WHERE o.member_id = m.id AND o.coach_id = ?)";
+            $where[] = "EXISTS (SELECT 1 FROM orders o WHERE o.member_id = m.id AND o.coach_id = ? AND o.status IN ('진행중', '매칭완료'))";
             $params[] = $user['id'];
         }
 
