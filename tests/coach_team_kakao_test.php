@@ -201,9 +201,11 @@ $unassigned = $db->query("
 ")->fetchColumn();
 t_assert_eq(0, (int)$unassigned, 'active 미배정 코치 0명');
 
-// 카톡방 28명
-$withKakao = (int)$db->query("SELECT COUNT(*) FROM coaches WHERE kakao_room_url IS NOT NULL")->fetchColumn();
-t_assert_eq(28, $withKakao, 'kakao_room_url 보유 28명');
+// 카톡방 28명 (active only — 시드는 active 코치 한정)
+$withKakao = (int)$db->query("
+    SELECT COUNT(*) FROM coaches WHERE status='active' AND kakao_room_url IS NOT NULL
+")->fetchColumn();
+t_assert_eq(28, $withKakao, 'active + kakao_room_url 보유 28명');
 
 // 카톡방 미설정 active = Frida, Jenny
 $noKakao = $db->query("
@@ -219,4 +221,7 @@ foreach ($urls as $u) {
     try { normalizeKakaoRoomUrl($u); }
     catch (InvalidArgumentException $e) { $invalid[] = $u; }
 }
-t_assert_eq([], $invalid, '시드 카톡방 URL 모두 정규식 통과');
+$label = empty($invalid)
+    ? '시드 카톡방 URL 모두 정규식 통과'
+    : '시드 카톡방 URL 정규식 실패: ' . $invalid[0];
+t_assert_eq([], $invalid, $label);
