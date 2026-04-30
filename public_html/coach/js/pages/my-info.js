@@ -3,6 +3,12 @@
  * - 본인 정보 (이름, 한글이름, 카톡방 링크 + 복사)
  * - 소속 팀 (팀명/팀장)
  * - 팀장에게만: 같은 팀원 명단 표
+ *
+ * NOTE (XSS): "복사" 버튼의 onclick 핸들러는 url을 single-quoted JS 문자열에
+ * 인라인 인터폴레이션한다. 안전성은 kakao_room_url 정규식
+ * (^https://open\.kakao\.com/(o|me)/[A-Za-z0-9_]+$)이 single quote/backslash를
+ * 절대 허용하지 않는 데에 의존한다. 정규식이 느슨해지면 이 패턴을
+ * data-attribute + 위임 리스너로 전환할 것.
  */
 CoachApp.registerPage('my-info', {
   async render() {
