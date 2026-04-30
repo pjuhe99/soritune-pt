@@ -43,6 +43,7 @@ switch ($action) {
         if (!$loginId || !$password || !$coachName) jsonError('필수 항목을 입력하세요');
 
         // 신규 필드 검증
+        $kakaoUrl = null;
         try {
             $kakaoUrl = normalizeKakaoRoomUrl($input['kakao_room_url'] ?? null);
         } catch (InvalidArgumentException $e) {

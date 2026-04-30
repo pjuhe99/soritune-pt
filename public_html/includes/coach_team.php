@@ -17,6 +17,18 @@ function normalizeKakaoRoomUrl(?string $raw): ?string
     return $trimmed;
 }
 
+/**
+ * Validate that $leaderId is a valid team leader for assignment.
+ * - $leaderId === null → no team (allowed, no-op)
+ * - $leaderId === $coachId → self-leader (allowed, no-op)
+ * - otherwise → must be an active coach with team_leader_id = self.id
+ *
+ * Sentinel: pass $coachId = 0 when validating a not-yet-persisted coach
+ * (e.g. during INSERT). Since real coach ids are >= 1, this disables the
+ * self-equality short-circuit and forces a full DB check on $leaderId.
+ *
+ * @throws InvalidArgumentException when $leaderId is set but invalid.
+ */
 function validateTeamLeaderId(PDO $db, int $coachId, ?int $leaderId): void
 {
     if ($leaderId === null) return;
