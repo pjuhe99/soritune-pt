@@ -64,6 +64,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
       <a href="#retention" data-page="retention">리텐션관리</a>
       <a href="#matching" data-page="matching">매칭관리</a>
       <a href="#notify" data-page="notify">알림톡</a>
+      <a href="#kakao-check" data-page="kakao-check">카톡방 입장 체크</a>
     </nav>
   </aside>
   <main class="main-content">
@@ -87,6 +88,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 <script src="/admin/js/pages/retention.js"></script>
 <script src="/admin/js/pages/matching.js"></script>
 <script src="/admin/js/pages/notify.js"></script>
+<script src="/admin/js/pages/kakao-check.js"></script>
 <script>App.init();</script>
 <?php endif; ?>
 
