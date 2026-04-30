@@ -103,6 +103,53 @@ function kakaoCheckList(PDO $db, array $opts): array
     return ['orders' => $orders, 'products' => $products];
 }
 
+/**
+ * order의 kakao_room_joined 토글. 권한 체크는 caller 책임.
+ *
+ * @param bool   $joined     true=ON / false=OFF
+ * @param string $actorType  'admin' | 'coach'
+ * @param int    $actorId    user.id
+ * @return bool  실제로 값이 바뀌었는지 (false면 no-op)
+ */
+function kakaoCheckToggle(PDO $db, int $orderId, bool $joined, string $actorType, int $actorId): bool
+{
+    $current = $db->prepare("SELECT kakao_room_joined FROM orders WHERE id = ?");
+    $current->execute([$orderId]);
+    $row = $current->fetch();
+    if (!$row) {
+        return false;
+    }
+    $oldVal = (int)$row['kakao_room_joined'];
+    $newVal = $joined ? 1 : 0;
+    if ($oldVal === $newVal) {
+        return false; // idempotent no-op
+    }
+    if ($joined) {
+        $db->prepare("
+            UPDATE orders
+               SET kakao_room_joined = 1,
+                   kakao_room_joined_at = NOW(),
+                   kakao_room_joined_by = ?
+             WHERE id = ?
+        ")->execute([$actorId, $orderId]);
+        $action = 'kakao_room_join';
+    } else {
+        $db->prepare("
+            UPDATE orders
+               SET kakao_room_joined = 0,
+                   kakao_room_joined_at = NULL,
+                   kakao_room_joined_by = NULL
+             WHERE id = ?
+        ")->execute([$orderId]);
+        $action = 'kakao_room_unjoin';
+    }
+    logChange($db, 'order', $orderId, $action,
+        ['kakao_room_joined' => $oldVal],
+        ['kakao_room_joined' => $newVal],
+        $actorType, $actorId);
+    return true;
+}
+
 // --- 라우터 진입점 (lib only 모드에서는 스킵) ---
 if (PHP_SAPI === 'cli' || defined('KAKAO_CHECK_LIB_ONLY')) return;
 
@@ -141,7 +188,24 @@ switch ($action) {
         jsonSuccess($result);
 
     case 'toggle_join':
-        jsonError('TODO: implement toggle_join', 501);
+        $input = getJsonInput();
+        $orderId = (int)($input['order_id'] ?? 0);
+        $joined = !empty($input['joined']);
+        if (!$orderId) jsonError('order_id가 필요합니다');
+
+        // 코치 권한: 본인 order만 (admin은 통과)
+        if ($user['role'] === 'coach') {
+            $stmt = $db->prepare("SELECT coach_id FROM orders WHERE id = ?");
+            $stmt->execute([$orderId]);
+            $row = $stmt->fetch();
+            if (!$row) jsonError('order를 찾을 수 없습니다', 404);
+            if ((int)$row['coach_id'] !== (int)$user['id']) {
+                jsonError('권한이 없습니다', 403);
+            }
+        }
+
+        kakaoCheckToggle($db, $orderId, $joined, $user['role'], (int)$user['id']);
+        jsonSuccess(['joined' => $joined ? 1 : 0]);
 
     case 'set_cohort':
         jsonError('TODO: implement set_cohort', 501);

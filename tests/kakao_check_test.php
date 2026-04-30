@@ -12,6 +12,9 @@ $stmt = $db->prepare("SELECT id FROM coaches WHERE status='active' AND id != ? L
 $stmt->execute([$activeCoach]);
 $otherCoach = (int)$stmt->fetchColumn();
 
+// admin ID 최상단 조회 (toggle_join 테스트에서 공유)
+$adminId = (int)$db->query("SELECT id FROM admins LIMIT 1")->fetchColumn();
+
 // 이후 태스크들이 여기에 cohorts / list / toggle_join / set_cohort 섹션을 추가한다.
 
 define('KAKAO_CHECK_LIB_ONLY', true);
@@ -148,6 +151,58 @@ if ($activeCoach === 0) {
     t_assert_true(in_array($os, $ids, true), 'Speaking 필터: os 포함');
     t_assert_true(!in_array($ol, $ids, true), 'Speaking 필터: ol 제외');
     t_assert_eq(2, count($result['products']), 'products는 product 필터 무시 — 여전히 2종');
+
+    $db->rollBack();
+}
+
+t_section('toggle_join — 기본 ON');
+
+if ($activeCoach === 0) {
+    echo "  SKIP  active 코치 없음\n";
+} elseif ($adminId === 0) {
+    echo "  SKIP  admin 없음\n";
+} else {
+    $db->beginTransaction();
+    $o = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09']);
+
+    kakaoCheckToggle($db, $o, true, 'admin', $adminId);
+
+    $row = $db->query("SELECT kakao_room_joined, kakao_room_joined_at, kakao_room_joined_by FROM orders WHERE id={$o}")->fetch();
+    t_assert_eq(1, (int)$row['kakao_room_joined'], 'joined=1');
+    t_assert_true($row['kakao_room_joined_at'] !== null, 'joined_at NOT NULL');
+    t_assert_eq($adminId, (int)$row['kakao_room_joined_by'], 'joined_by = adminId');
+
+    $log = $db->query("SELECT action, actor_type, actor_id, old_value, new_value FROM change_logs WHERE target_type='order' AND target_id={$o} ORDER BY id DESC LIMIT 1")->fetch();
+    t_assert_eq('kakao_room_join', $log['action'], 'log action = kakao_room_join');
+    t_assert_eq('admin', $log['actor_type'], 'log actor_type = admin');
+    t_assert_eq($adminId, (int)$log['actor_id'], 'log actor_id = adminId');
+
+    $db->rollBack();
+}
+
+t_section('toggle_join — OFF + idempotent');
+
+if ($activeCoach === 0) {
+    echo "  SKIP  active 코치 없음\n";
+} else {
+    $db->beginTransaction();
+    $o = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09']);
+    $db->prepare("UPDATE orders SET kakao_room_joined=1, kakao_room_joined_at=NOW(), kakao_room_joined_by=999 WHERE id=?")->execute([$o]);
+
+    // OFF로 토글
+    $changed = kakaoCheckToggle($db, $o, false, 'coach', $activeCoach);
+    t_assert_true($changed, 'OFF 토글 — 값 바뀜');
+    $row = $db->query("SELECT kakao_room_joined, kakao_room_joined_at, kakao_room_joined_by FROM orders WHERE id={$o}")->fetch();
+    t_assert_eq(0, (int)$row['kakao_room_joined'], 'joined=0');
+    t_assert_true($row['kakao_room_joined_at'] === null, 'joined_at = NULL');
+    t_assert_true($row['kakao_room_joined_by'] === null, 'joined_by = NULL');
+
+    // 같은 값으로 다시 호출 → no-op
+    $logCountBefore = (int)$db->query("SELECT COUNT(*) FROM change_logs WHERE target_type='order' AND target_id={$o}")->fetchColumn();
+    $changed2 = kakaoCheckToggle($db, $o, false, 'coach', $activeCoach);
+    $logCountAfter = (int)$db->query("SELECT COUNT(*) FROM change_logs WHERE target_type='order' AND target_id={$o}")->fetchColumn();
+    t_assert_eq(false, $changed2, 'idempotent: 같은 값 재호출 false');
+    t_assert_eq($logCountBefore, $logCountAfter, 'idempotent: change_logs 추가 없음');
 
     $db->rollBack();
 }
