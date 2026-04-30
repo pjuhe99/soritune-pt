@@ -40,10 +40,10 @@ CoachApp.registerPage('kakao-check', {
   },
 
   pickDefaultCohort(cohorts) {
+    // KST 현재 월 산출: UTC에 +9h 더한 뒤 UTC 메서드로 읽으면 timezone agnostic
     const now = new Date();
-    const ksOffset = 9 * 60 * 60 * 1000;
-    const kst = new Date(now.getTime() + (ksOffset - now.getTimezoneOffset() * 60000));
-    const cur = kst.getFullYear() + '-' + String(kst.getMonth() + 1).padStart(2, '0');
+    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const cur = kst.getUTCFullYear() + '-' + String(kst.getUTCMonth() + 1).padStart(2, '0');
     if (cohorts.includes(cur)) return cur;
     const future = cohorts.filter(c => c > cur).sort();
     if (future.length) return future[0];
@@ -54,7 +54,7 @@ CoachApp.registerPage('kakao-check', {
   renderCohortTabs() {
     const html = this.cohorts.map(c => `
       <button class="filter-pill ${c === this.selectedCohort ? 'active' : ''}"
-              onclick="CoachApp.pages['kakao-check'].selectCohort('${c}')">${c}</button>
+              onclick="CoachApp.pages['kakao-check'].selectCohort('${UI.esc(c)}')">${UI.esc(c)}</button>
     `).join('');
     document.getElementById('cohortTabs').innerHTML = html;
   },
