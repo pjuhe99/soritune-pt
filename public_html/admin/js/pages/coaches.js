@@ -206,6 +206,13 @@ App.registerPage('coaches', {
           </div>
         </div>
         <div class="form-group">
+          <label class="form-label">1:1PT 카톡방 링크</label>
+          <input class="form-input" type="url" name="kakao_room_url"
+                 value="${UI.esc(coach.kakao_room_url || '')}"
+                 placeholder="https://open.kakao.com/o/...">
+          <div id="kakaoUrlError" style="display:none;color:var(--text-negative);font-size:12px;margin-top:4px"></div>
+        </div>
+        <div class="form-group">
           <label class="form-label">메모</label>
           <textarea class="form-textarea" name="memo">${UI.esc(coach.memo || '')}</textarea>
         </div>
@@ -242,6 +249,19 @@ App.registerPage('coaches', {
       body.team_leader_id = body.is_team_leader
         ? null
         : (form.elements.team_leader_id.value || null);
+      body.kakao_room_url = (body.kakao_room_url || '').trim() || null;
+
+      // 클라이언트 검증 (서버와 동일 정규식)
+      const errEl = document.getElementById('kakaoUrlError');
+      errEl.style.display = 'none';
+      if (body.kakao_room_url) {
+        const re = /^https:\/\/open\.kakao\.com\/(o|me)\/[A-Za-z0-9_]+$/;
+        if (!re.test(body.kakao_room_url)) {
+          errEl.textContent = '카톡방 링크 형식이 올바르지 않습니다 (https://open.kakao.com/o/... 또는 /me/...)';
+          errEl.style.display = 'block';
+          return;
+        }
+      }
       if (isEdit && !body.password) delete body.password;
 
       const url = isEdit
