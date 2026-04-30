@@ -48,6 +48,19 @@ function getJsonInput(): array
 }
 
 /**
+ * 엑셀 과학표기 손상 패턴 감지.
+ * 예: 12자리 한국 번호 821012341234 → 엑셀이 8.21012E+11로 변환 → 다시 저장하면 "821012+11" 형태로
+ * 뒤 5자리가 영구 소실. 이 패턴이면 phone 데이터는 복구 불가.
+ *
+ * @return bool true if 손상 시그니처 (digits+digits)
+ */
+function isPhoneCorrupted(?string $phone): bool
+{
+    if ($phone === null || $phone === '') return false;
+    return (bool)preg_match('/^\s*\d+\+\d+\s*$/', $phone);
+}
+
+/**
  * Normalize a phone number to plain digits.
  * - Strips hyphens and spaces
  * - Converts +82 / 82 country code to 010 prefix

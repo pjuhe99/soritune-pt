@@ -98,7 +98,16 @@ switch ($action) {
                 continue;
             }
 
-            $phone = normalizePhone($row['전화번호'] ?? $row['phone'] ?? null);
+            $rawPhone = $row['전화번호'] ?? $row['phone'] ?? null;
+            if (isPhoneCorrupted($rawPhone)) {
+                // 엑셀 과학표기 손상 — 데이터 복구 불가. phone NULL로 저장하고 warning 기록.
+                $db->prepare("INSERT INTO migration_logs (batch_id, source_type, source_row, status, message)
+                    VALUES (?, 'spreadsheet', ?, 'warning', ?)")
+                    ->execute([$batchId, $rowNum, "전화번호 손상 패턴 감지: '{$rawPhone}' (엑셀 과학표기 의심) — phone NULL 저장"]);
+                $phone = null;
+            } else {
+                $phone = normalizePhone($rawPhone);
+            }
             $email = $row['이메일'] ?? $row['email'] ?? null;
             $memo = $row['메모'] ?? $row['memo'] ?? '';
 
