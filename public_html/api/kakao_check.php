@@ -29,7 +29,7 @@ function kakaoCheckCohorts(PDO $db, ?int $coachId): array
 }
 
 // --- 라우터 진입점 (lib only 모드에서는 스킵) ---
-if (defined('KAKAO_CHECK_LIB_ONLY')) return;
+if (PHP_SAPI === 'cli' || defined('KAKAO_CHECK_LIB_ONLY')) return;
 
 header('Content-Type: application/json; charset=utf-8');
 $user = requireAnyAuth();
