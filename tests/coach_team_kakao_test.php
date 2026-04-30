@@ -172,3 +172,51 @@ foreach (['inactive', 'unset_leader', 'delete'] as $action) {
     );
 }
 $db->rollBack();
+
+t_section('시드 데이터 정합성');
+
+// 팀장 3명이 모두 self-ref
+$leaders = $db->query("
+    SELECT coach_name FROM coaches
+    WHERE team_leader_id = id AND status = 'active'
+    ORDER BY coach_name
+")->fetchAll(PDO::FETCH_COLUMN);
+t_assert_eq(['Flora', 'Kel', 'Nana'], $leaders, '팀장 3명 = Flora/Kel/Nana');
+
+// 각 팀별 멤버 수 (본인 포함하면 10명씩)
+$counts = $db->query("
+    SELECT l.coach_name, COUNT(*) AS n
+    FROM coaches c JOIN coaches l ON l.id = c.team_leader_id
+    WHERE c.status='active'
+    GROUP BY l.id, l.coach_name
+    ORDER BY l.coach_name
+")->fetchAll(PDO::FETCH_KEY_PAIR);
+t_assert_eq(10, (int)$counts['Kel'], 'Kel팀 10명 (본인 포함)');
+t_assert_eq(10, (int)$counts['Nana'], 'Nana팀 10명');
+t_assert_eq(10, (int)$counts['Flora'], 'Flora팀 10명');
+
+// active 코치 30명 모두 팀 배정
+$unassigned = $db->query("
+    SELECT COUNT(*) FROM coaches WHERE status='active' AND team_leader_id IS NULL
+")->fetchColumn();
+t_assert_eq(0, (int)$unassigned, 'active 미배정 코치 0명');
+
+// 카톡방 28명
+$withKakao = (int)$db->query("SELECT COUNT(*) FROM coaches WHERE kakao_room_url IS NOT NULL")->fetchColumn();
+t_assert_eq(28, $withKakao, 'kakao_room_url 보유 28명');
+
+// 카톡방 미설정 active = Frida, Jenny
+$noKakao = $db->query("
+    SELECT coach_name FROM coaches
+    WHERE status='active' AND kakao_room_url IS NULL ORDER BY coach_name
+")->fetchAll(PDO::FETCH_COLUMN);
+t_assert_eq(['Frida', 'Jenny'], $noKakao, '카톡방 미설정은 Frida, Jenny');
+
+// 모든 카톡방 URL이 정규식 통과
+$urls = $db->query("SELECT kakao_room_url FROM coaches WHERE kakao_room_url IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN);
+$invalid = [];
+foreach ($urls as $u) {
+    try { normalizeKakaoRoomUrl($u); }
+    catch (InvalidArgumentException $e) { $invalid[] = $u; }
+}
+t_assert_eq([], $invalid, '시드 카톡방 URL 모두 정규식 통과');
