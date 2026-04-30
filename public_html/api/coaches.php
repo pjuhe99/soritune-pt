@@ -13,9 +13,13 @@ switch ($action) {
     case 'list':
         $stmt = $db->query("
             SELECT c.*,
+              leader.coach_name AS team_leader_name,
+              (SELECT COUNT(*) FROM coaches m
+                WHERE m.team_leader_id = c.id AND m.id != c.id) AS team_member_count,
               (SELECT COUNT(DISTINCT o.member_id) FROM orders o
                WHERE o.coach_id = c.id AND o.status = '진행중') AS current_count
             FROM coaches c
+            LEFT JOIN coaches leader ON leader.id = c.team_leader_id
             ORDER BY c.status ASC, c.coach_name ASC
         ");
         jsonSuccess(['coaches' => $stmt->fetchAll()]);
