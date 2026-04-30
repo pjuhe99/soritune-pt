@@ -100,6 +100,10 @@ CREATE TABLE `orders` (
   `total_sessions` INT DEFAULT NULL,
   `amount` INT NOT NULL DEFAULT 0,
   `status` ENUM('매칭대기','매칭완료','진행중','연기','중단','환불','종료') NOT NULL DEFAULT '매칭대기',
+  `cohort_month` CHAR(7) DEFAULT NULL,
+  `kakao_room_joined` TINYINT(1) NOT NULL DEFAULT 0,
+  `kakao_room_joined_at` DATETIME DEFAULT NULL,
+  `kakao_room_joined_by` INT DEFAULT NULL,
   `memo` TEXT,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -108,7 +112,9 @@ CREATE TABLE `orders` (
   INDEX `idx_member_id` (`member_id`),
   INDEX `idx_coach_id` (`coach_id`),
   INDEX `idx_status` (`status`),
-  INDEX `idx_natural_key` (`member_id`, `product_name`, `start_date`)
+  INDEX `idx_natural_key` (`member_id`, `product_name`, `start_date`),
+  KEY `idx_cohort_month` (`cohort_month`),
+  KEY `idx_kakao_room` (`kakao_room_joined`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 6. order_sessions
