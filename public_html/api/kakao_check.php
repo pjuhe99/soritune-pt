@@ -28,6 +28,81 @@ function kakaoCheckCohorts(PDO $db, ?int $coachId): array
     return $stmt->fetchAll(PDO::FETCH_COLUMN);
 }
 
+/**
+ * 특정 cohort의 order 리스트 + product distinct 목록.
+ *
+ * @param array{cohort:string, coach_id:?int, include_joined:bool, product:?string} $opts
+ * @return array{orders:array, products:string[]}
+ */
+function kakaoCheckList(PDO $db, array $opts): array
+{
+    $cohort = $opts['cohort'];
+    $coachId = $opts['coach_id'] ?? null;
+    $includeJoined = !empty($opts['include_joined']);
+    $product = $opts['product'] ?? null;
+
+    // ---- products 리스트 (product 필터 무시, scope만 적용) ----
+    $pWhere = [
+        "o.status IN ('진행중', '매칭완료')",
+        "COALESCE(o.cohort_month, DATE_FORMAT(o.start_date, '%Y-%m')) = ?",
+    ];
+    $pParams = [$cohort];
+    if ($coachId !== null) {
+        $pWhere[] = "o.coach_id = ?";
+        $pParams[] = $coachId;
+    }
+    if (!$includeJoined) {
+        $pWhere[] = "o.kakao_room_joined = 0";
+    }
+    $pSql = "
+        SELECT DISTINCT o.product_name
+        FROM orders o
+        WHERE " . implode(' AND ', $pWhere) . "
+          AND o.product_name IS NOT NULL AND o.product_name != ''
+        ORDER BY o.product_name
+    ";
+    $stmt = $db->prepare($pSql);
+    $stmt->execute($pParams);
+    $products = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    // ---- orders 리스트 ----
+    $oWhere = $pWhere;
+    $oParams = $pParams;
+    if ($product !== null && $product !== '') {
+        $oWhere[] = "o.product_name = ?";
+        $oParams[] = $product;
+    }
+    $oSql = "
+        SELECT
+          o.id AS order_id,
+          o.member_id,
+          m.name,
+          m.phone,
+          m.email,
+          o.product_name,
+          o.start_date,
+          o.end_date,
+          o.status,
+          CASE WHEN o.status = '매칭완료' THEN '진행예정' ELSE o.status END AS display_status,
+          o.cohort_month AS cohort_month_override,
+          COALESCE(o.cohort_month, DATE_FORMAT(o.start_date, '%Y-%m')) AS effective_cohort,
+          o.kakao_room_joined,
+          o.kakao_room_joined_at,
+          o.coach_id,
+          c.coach_name
+        FROM orders o
+        JOIN members m ON m.id = o.member_id
+        LEFT JOIN coaches c ON c.id = o.coach_id
+        WHERE " . implode(' AND ', $oWhere) . "
+        ORDER BY o.start_date ASC, m.name ASC
+    ";
+    $stmt = $db->prepare($oSql);
+    $stmt->execute($oParams);
+    $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    return ['orders' => $orders, 'products' => $products];
+}
+
 // --- 라우터 진입점 (lib only 모드에서는 스킵) ---
 if (PHP_SAPI === 'cli' || defined('KAKAO_CHECK_LIB_ONLY')) return;
 
@@ -47,7 +122,23 @@ switch ($action) {
         jsonSuccess(['cohorts' => kakaoCheckCohorts($db, $coachId)]);
 
     case 'list':
-        jsonError('TODO: implement list', 501);
+        $cohort = trim($_GET['cohort'] ?? '');
+        if (!preg_match('/^\d{4}-\d{2}$/', $cohort)) {
+            jsonError('cohort 파라미터가 필요합니다 (YYYY-MM)');
+        }
+        $coachId = null;
+        if ($user['role'] === 'coach') {
+            $coachId = (int)$user['id'];
+        } elseif ($user['role'] === 'admin' && !empty($_GET['coach_id'])) {
+            $coachId = (int)$_GET['coach_id'];
+        }
+        $result = kakaoCheckList($db, [
+            'cohort' => $cohort,
+            'coach_id' => $coachId,
+            'include_joined' => !empty($_GET['include_joined']) && $_GET['include_joined'] !== '0',
+            'product' => trim($_GET['product'] ?? '') ?: null,
+        ]);
+        jsonSuccess($result);
 
     case 'toggle_join':
         jsonError('TODO: implement toggle_join', 501);

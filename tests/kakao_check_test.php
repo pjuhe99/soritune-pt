@@ -69,3 +69,85 @@ if ($activeCoach === 0) {
 
     $db->rollBack();
 }
+
+t_section('list — 기본 list (include_joined=0)');
+
+if ($activeCoach === 0) {
+    echo "  SKIP  active 코치 없음\n";
+} else {
+    $db->beginTransaction();
+    $o1 = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09', 'product_name' => 'Speaking 3개월']);
+    $o2 = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-20', 'end_date' => '2026-07-19', 'product_name' => 'Listening 3개월']);
+    $o3 = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-15', 'end_date' => '2026-07-14', 'product_name' => 'Speaking 3개월']);
+    $db->prepare("UPDATE orders SET kakao_room_joined=1, kakao_room_joined_at=NOW() WHERE id=?")->execute([$o3]);
+
+    $result = kakaoCheckList($db, [
+        'cohort' => '2026-04',
+        'coach_id' => $activeCoach,
+        'include_joined' => false,
+        'product' => null,
+    ]);
+
+    t_assert_eq(2, count($result['orders']), 'include_joined=false면 체크된 행 제외 → 2건');
+    t_assert_eq($o1, (int)$result['orders'][0]['order_id'], '정렬: start_date ASC → o1 첫번째');
+    t_assert_eq(2, count($result['products']), 'products: 체크된 것 포함 distinct 2종');
+    t_assert_true(in_array('Speaking 3개월', $result['products'], true), 'products에 Speaking 포함');
+    t_assert_true(in_array('Listening 3개월', $result['products'], true), 'products에 Listening 포함');
+
+    $db->rollBack();
+}
+
+t_section('list — include_joined=true 시 체크된 행 등장');
+
+if ($activeCoach === 0) {
+    echo "  SKIP  active 코치 없음\n";
+} else {
+    $db->beginTransaction();
+    $o1 = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09']);
+    $o2 = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-15', 'end_date' => '2026-07-14']);
+    $db->prepare("UPDATE orders SET kakao_room_joined=1 WHERE id=?")->execute([$o2]);
+
+    $result = kakaoCheckList($db, ['cohort' => '2026-04', 'coach_id' => $activeCoach, 'include_joined' => true, 'product' => null]);
+    $ids = array_map(fn($r) => (int)$r['order_id'], $result['orders']);
+    t_assert_true(in_array($o1, $ids, true), 'include_joined=true: o1 (체크안됨) 포함');
+    t_assert_true(in_array($o2, $ids, true), 'include_joined=true: o2 (체크됨) 포함');
+
+    $db->rollBack();
+}
+
+t_section('list — cohort_month override가 effective_cohort 반영');
+
+if ($activeCoach === 0) {
+    echo "  SKIP  active 코치 없음\n";
+} else {
+    $db->beginTransaction();
+    $o = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-28', 'end_date' => '2026-07-27']);
+    $db->prepare("UPDATE orders SET cohort_month='2026-05' WHERE id=?")->execute([$o]);
+
+    $april = kakaoCheckList($db, ['cohort' => '2026-04', 'coach_id' => $activeCoach, 'include_joined' => false, 'product' => null]);
+    $may = kakaoCheckList($db, ['cohort' => '2026-05', 'coach_id' => $activeCoach, 'include_joined' => false, 'product' => null]);
+    $aprilIds = array_map(fn($r) => (int)$r['order_id'], $april['orders']);
+    $mayIds = array_map(fn($r) => (int)$r['order_id'], $may['orders']);
+    t_assert_true(!in_array($o, $aprilIds, true), 'override된 order는 4월에서 사라짐');
+    t_assert_true(in_array($o, $mayIds, true), 'override된 order는 5월에 등장');
+
+    $db->rollBack();
+}
+
+t_section('list — product 필터');
+
+if ($activeCoach === 0) {
+    echo "  SKIP  active 코치 없음\n";
+} else {
+    $db->beginTransaction();
+    $os = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09', 'product_name' => 'Speaking']);
+    $ol = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-15', 'end_date' => '2026-07-14', 'product_name' => 'Listening']);
+
+    $result = kakaoCheckList($db, ['cohort' => '2026-04', 'coach_id' => $activeCoach, 'include_joined' => false, 'product' => 'Speaking']);
+    $ids = array_map(fn($r) => (int)$r['order_id'], $result['orders']);
+    t_assert_true(in_array($os, $ids, true), 'Speaking 필터: os 포함');
+    t_assert_true(!in_array($ol, $ids, true), 'Speaking 필터: ol 제외');
+    t_assert_eq(2, count($result['products']), 'products는 product 필터 무시 — 여전히 2종');
+
+    $db->rollBack();
+}
