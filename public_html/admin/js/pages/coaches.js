@@ -45,6 +45,7 @@ App.registerPage('coaches', {
               <th>생년월일</th>
               <th>입사일</th>
               <th>직급</th>
+              <th>팀</th>
               <th>평가</th>
               <th>상태</th>
               <th>배정</th>
@@ -57,13 +58,21 @@ App.registerPage('coaches', {
             </tr>
           </thead>
           <tbody>
-            ${coaches.map(c => `
+            ${coaches.map(c => {
+              const isLead = c.team_leader_id != null && Number(c.team_leader_id) === Number(c.id);
+              const teamCell = c.team_leader_id == null
+                ? '-'
+                : (isLead
+                    ? `<span style="color:#FF5E00;font-weight:700">★ ${UI.esc(c.team_leader_name)}팀</span>`
+                    : `${UI.esc(c.team_leader_name)}팀`);
+              return `
               <tr>
                 <td>${UI.esc(c.coach_name)}</td>
                 <td>${UI.esc(c.korean_name || '')}</td>
                 <td>${UI.esc(c.birthdate || '-')}</td>
                 <td>${UI.esc(c.hired_on || '-')}</td>
                 <td>${UI.esc(c.role || '-')}</td>
+                <td>${teamCell}</td>
                 <td>${evalBadge(c.evaluation)}</td>
                 <td>${UI.statusBadge(c.status)}</td>
                 <td>${c.available == 1 ? '<span style="color:var(--success)">가능</span>' : '<span style="color:var(--text-secondary)">불가</span>'}</td>
@@ -76,7 +85,8 @@ App.registerPage('coaches', {
                   <button class="btn btn-small btn-secondary" onclick="App.pages.coaches.showForm(${c.id})">편집</button>
                 </td>
               </tr>
-            `).join('')}
+            `;
+            }).join('')}
           </tbody>
         </table>
       </div>
