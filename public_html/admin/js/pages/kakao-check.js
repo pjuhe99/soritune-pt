@@ -254,8 +254,8 @@ App.registerPage('kakao-check', {
       `<option value="${UI.esc(c)}" ${c === this.bulkCohort ? 'selected' : ''}>${UI.esc(c)}</option>`
     ).join('');
     bar.innerHTML = `
-      <div style="position:sticky; bottom:0; background:#fff; border-top:1px solid #ddd; padding:12px;
-                  display:flex; align-items:center; gap:12px; box-shadow:0 -2px 6px rgba(0,0,0,0.06);">
+      <div style="position:sticky; bottom:0; background:var(--surface); border-top:1px solid var(--border); padding:12px;
+                  display:flex; align-items:center; gap:12px; box-shadow:0 -2px 6px rgba(0,0,0,0.4); z-index:10;">
         <strong>${n}건 선택됨</strong>
         <select class="filter-pill" onchange="App.pages['kakao-check'].setBulkCohort(this.value)">
           <option value="">목적지 월 선택…</option>

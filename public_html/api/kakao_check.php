@@ -21,7 +21,7 @@ function kakaoCheckCohorts(PDO $db, ?int $coachId): array
         SELECT DISTINCT COALESCE(cohort_month, DATE_FORMAT(start_date, '%Y-%m')) AS cohort
         FROM orders o
         WHERE " . implode(' AND ', $where) . "
-        ORDER BY cohort
+        ORDER BY cohort DESC
     ";
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
