@@ -211,3 +211,62 @@ t_section('toggle_join — non-existent order returns false');
 
 $changed = kakaoCheckToggle($db, 99999999, true, 'admin', 1);
 t_assert_eq(false, $changed, 'non-existent order_id → false (no exception)');
+
+t_section('set_cohort — bulk override');
+
+if ($activeCoach === 0 || $adminId === 0) {
+    echo "  SKIP  active 코치/admin 없음\n";
+} else {
+    $db->beginTransaction();
+    $o1 = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-28', 'end_date' => '2026-07-27']);
+    $o2 = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-29', 'end_date' => '2026-07-28']);
+
+    $updated = kakaoCheckSetCohort($db, [$o1, $o2], '2026-05', $adminId);
+    t_assert_eq(2, $updated, 'updated 카운트 = 2');
+
+    $rows = $db->query("SELECT cohort_month FROM orders WHERE id IN ({$o1},{$o2}) ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
+    t_assert_eq(['2026-05', '2026-05'], $rows, '두 행 모두 cohort_month=2026-05');
+
+    $logCount = (int)$db->query("SELECT COUNT(*) FROM change_logs WHERE target_type='order' AND target_id IN ({$o1},{$o2}) AND action='cohort_month_set'")->fetchColumn();
+    t_assert_eq(2, $logCount, 'change_logs 2건 (각 order당 1건)');
+
+    $db->rollBack();
+}
+
+t_section('set_cohort — NULL 복원');
+
+if ($activeCoach === 0 || $adminId === 0) {
+    echo "  SKIP  active 코치/admin 없음\n";
+} else {
+    $db->beginTransaction();
+    $o = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-28', 'end_date' => '2026-07-27']);
+    $db->prepare("UPDATE orders SET cohort_month='2026-05' WHERE id=?")->execute([$o]);
+
+    $updated = kakaoCheckSetCohort($db, [$o], null, $adminId);
+    t_assert_eq(1, $updated, 'NULL 복원 1건');
+    $cm = $db->query("SELECT cohort_month FROM orders WHERE id={$o}")->fetchColumn();
+    t_assert_true($cm === null, 'cohort_month = NULL');
+
+    $log = $db->query("SELECT new_value FROM change_logs WHERE target_type='order' AND target_id={$o} AND action='cohort_month_set' ORDER BY id DESC LIMIT 1")->fetch();
+    t_assert_eq('{"cohort_month":null}', $log['new_value'], 'log new_value JSON null');
+
+    $db->rollBack();
+}
+
+t_section('set_cohort — no-op (같은 값)');
+
+if ($activeCoach === 0 || $adminId === 0) {
+    echo "  SKIP  active 코치/admin 없음\n";
+} else {
+    $db->beginTransaction();
+    $o = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-28', 'end_date' => '2026-07-27']);
+    $db->prepare("UPDATE orders SET cohort_month='2026-05' WHERE id=?")->execute([$o]);
+    $logCountBefore = (int)$db->query("SELECT COUNT(*) FROM change_logs WHERE target_type='order' AND target_id={$o}")->fetchColumn();
+
+    $updated = kakaoCheckSetCohort($db, [$o], '2026-05', $adminId);
+    t_assert_eq(0, $updated, 'no-op: updated=0');
+    $logCountAfter = (int)$db->query("SELECT COUNT(*) FROM change_logs WHERE target_type='order' AND target_id={$o}")->fetchColumn();
+    t_assert_eq($logCountBefore, $logCountAfter, 'no-op: change_logs 추가 없음');
+
+    $db->rollBack();
+}

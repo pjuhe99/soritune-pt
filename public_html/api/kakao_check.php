@@ -150,6 +150,53 @@ function kakaoCheckToggle(PDO $db, int $orderId, bool $joined, string $actorType
     return true;
 }
 
+/**
+ * 여러 order의 cohort_month를 일괄 설정 (또는 NULL 복원). admin only.
+ * 트랜잭션으로 묶어 모두 성공 또는 모두 실패.
+ *
+ * @param int[]       $orderIds
+ * @param string|null $cohortMonth  'YYYY-MM' 또는 null(override 해제)
+ * @param int         $adminId
+ * @return int  실제 UPDATE된 행 수 (변경 없는 행은 제외)
+ */
+function kakaoCheckSetCohort(PDO $db, array $orderIds, ?string $cohortMonth, int $adminId): int
+{
+    if (empty($orderIds)) return 0;
+    if ($cohortMonth !== null && !preg_match('/^\d{4}-\d{2}$/', $cohortMonth)) {
+        throw new InvalidArgumentException('cohort_month 형식 오류 (YYYY-MM)');
+    }
+
+    $ownTxn = !$db->inTransaction();
+    if ($ownTxn) $db->beginTransaction();
+    try {
+        $placeholders = implode(',', array_fill(0, count($orderIds), '?'));
+        $sel = $db->prepare("SELECT id, cohort_month FROM orders WHERE id IN ({$placeholders})");
+        $sel->execute($orderIds);
+        $existing = $sel->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        $updated = 0;
+        $upd = $db->prepare("UPDATE orders SET cohort_month = ? WHERE id = ?");
+
+        foreach ($orderIds as $oid) {
+            if (!array_key_exists($oid, $existing)) continue;
+            $oldVal = $existing[$oid]; // string 'YYYY-MM' 또는 null
+            if ($oldVal === $cohortMonth) continue; // no-op
+            $upd->execute([$cohortMonth, $oid]);
+            logChange($db, 'order', (int)$oid, 'cohort_month_set',
+                ['cohort_month' => $oldVal],
+                ['cohort_month' => $cohortMonth],
+                'admin', $adminId);
+            $updated++;
+        }
+
+        if ($ownTxn) $db->commit();
+        return $updated;
+    } catch (Throwable $e) {
+        if ($ownTxn && $db->inTransaction()) $db->rollBack();
+        throw $e;
+    }
+}
+
 // --- 라우터 진입점 (lib only 모드에서는 스킵) ---
 if (PHP_SAPI === 'cli' || defined('KAKAO_CHECK_LIB_ONLY')) return;
 
@@ -208,7 +255,25 @@ switch ($action) {
         jsonSuccess(['joined' => $joined ? 1 : 0]);
 
     case 'set_cohort':
-        jsonError('TODO: implement set_cohort', 501);
+        if ($user['role'] !== 'admin') jsonError('관리자만 가능합니다', 403);
+
+        $input = getJsonInput();
+        $orderIds = $input['order_ids'] ?? [];
+        $cohortMonth = $input['cohort_month'] ?? null;
+
+        if (!is_array($orderIds) || empty($orderIds)) jsonError('order_ids가 필요합니다');
+        $orderIds = array_map('intval', $orderIds);
+
+        if ($cohortMonth !== null && !preg_match('/^\d{4}-\d{2}$/', $cohortMonth)) {
+            jsonError('cohort_month 형식 오류 (YYYY-MM)');
+        }
+
+        try {
+            $updated = kakaoCheckSetCohort($db, $orderIds, $cohortMonth, (int)$user['id']);
+        } catch (InvalidArgumentException $e) {
+            jsonError($e->getMessage());
+        }
+        jsonSuccess(['updated' => $updated]);
 
     default:
         jsonError('알 수 없는 액션입니다', 404);
