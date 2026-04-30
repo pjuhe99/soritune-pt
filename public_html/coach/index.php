@@ -57,6 +57,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
     <div class="sidebar-logo">SoriTune PT</div>
     <nav class="sidebar-nav">
       <a href="#my-members" data-page="my-members">내 회원</a>
+      <a href="#kakao-check" data-page="kakao-check">카톡방 입장 체크</a>
     </nav>
   </aside>
   <main class="main-content">
@@ -73,6 +74,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 
 <script src="/coach/js/app.js"></script>
 <script src="/coach/js/pages/my-members.js"></script>
+<script src="/coach/js/pages/kakao-check.js"></script>
 <script src="/coach/js/pages/member-chart.js"></script>
 <script>CoachApp.init();</script>
 <?php endif; ?>
