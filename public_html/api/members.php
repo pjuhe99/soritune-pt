@@ -93,7 +93,7 @@ switch ($action) {
         $where = ["o.status = '진행중'"];
         $params = [];
         if ($user['role'] === 'coach') {
-            $where[] = "EXISTS (SELECT 1 FROM orders o2 WHERE o2.member_id = o.member_id AND o2.coach_id = ?)";
+            $where[] = "EXISTS (SELECT 1 FROM orders o2 WHERE o2.member_id = o.member_id AND o2.coach_id = ? AND o2.status IN ('진행중', '매칭완료'))";
             $params[] = $user['id'];
         }
         $whereSQL = implode(' AND ', $where);
@@ -105,9 +105,9 @@ switch ($action) {
         $id = (int)($_GET['id'] ?? 0);
         if (!$id) jsonError('ID가 필요합니다');
 
-        // Coach role: verify access (has any order for this member)
+        // Coach role: verify access — 현재 담당(진행중/매칭완료) order가 있어야 함
         if ($user['role'] === 'coach') {
-            $stmt = $db->prepare("SELECT 1 FROM orders WHERE member_id = ? AND coach_id = ? LIMIT 1");
+            $stmt = $db->prepare("SELECT 1 FROM orders WHERE member_id = ? AND coach_id = ? AND status IN ('진행중', '매칭완료') LIMIT 1");
             $stmt->execute([$id, $user['id']]);
             if (!$stmt->fetch()) jsonError('접근 권한이 없습니다', 403);
         }

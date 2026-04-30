@@ -14,7 +14,7 @@ switch ($action) {
         if (!$memberId) jsonError('member_id가 필요합니다');
 
         if ($user['role'] === 'coach') {
-            $stmt = $db->prepare("SELECT 1 FROM orders WHERE member_id = ? AND coach_id = ? LIMIT 1");
+            $stmt = $db->prepare("SELECT 1 FROM orders WHERE member_id = ? AND coach_id = ? AND status IN ('진행중', '매칭완료') LIMIT 1");
             $stmt->execute([$memberId, $user['id']]);
             if (!$stmt->fetch()) jsonError('접근 권한이 없습니다', 403);
         }
@@ -39,7 +39,7 @@ switch ($action) {
         if (!$memberId || !$content) jsonError('내용을 입력하세요');
 
         if ($user['role'] === 'coach') {
-            $stmt = $db->prepare("SELECT 1 FROM orders WHERE member_id = ? AND coach_id = ? LIMIT 1");
+            $stmt = $db->prepare("SELECT 1 FROM orders WHERE member_id = ? AND coach_id = ? AND status IN ('진행중', '매칭완료') LIMIT 1");
             $stmt->execute([$memberId, $user['id']]);
             if (!$stmt->fetch()) jsonError('접근 권한이 없습니다', 403);
         }
