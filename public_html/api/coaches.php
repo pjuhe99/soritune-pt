@@ -109,6 +109,49 @@ switch ($action) {
         if (!$id) jsonError('ID가 필요합니다');
         $input = getJsonInput();
 
+        // 현재 상태 조회 (cascade 차단 판정용)
+        $cur = $db->prepare("SELECT id, status, team_leader_id FROM coaches WHERE id = ?");
+        $cur->execute([$id]);
+        $current = $cur->fetch();
+        if (!$current) jsonError('코치를 찾을 수 없습니다', 404);
+        $isCurrentlyLeader = ((int)$current['team_leader_id'] === (int)$current['id']);
+
+        // is_team_leader / team_leader_id 의도 파악
+        $hasLeaderField = array_key_exists('is_team_leader', $input)
+                       || array_key_exists('team_leader_id', $input);
+        $isLeaderAfter = !empty($input['is_team_leader']);
+        $teamLeaderIdAfter = $isLeaderAfter ? $id : (
+            isset($input['team_leader_id']) && $input['team_leader_id'] !== ''
+                ? (int)$input['team_leader_id'] : null
+        );
+
+        // cascade 차단: 현재 팀장인데 (a) inactive 변경 시도 또는 (b) 팀장 해제
+        if ($isCurrentlyLeader) {
+            $statusAfter = $input['status'] ?? $current['status'];
+            if ($statusAfter === 'inactive') {
+                try { assertCanModifyLeader($db, $id, 'inactive'); }
+                catch (RuntimeException $e) { jsonError($e->getMessage()); }
+            }
+            if ($hasLeaderField && $teamLeaderIdAfter !== $id) {
+                try { assertCanModifyLeader($db, $id, 'unset_leader'); }
+                catch (RuntimeException $e) { jsonError($e->getMessage()); }
+            }
+        }
+
+        // team_leader_id 입력 검증 (타인 leader면 active 팀장인지 확인)
+        if ($hasLeaderField && $teamLeaderIdAfter !== null && $teamLeaderIdAfter !== $id) {
+            try { validateTeamLeaderId($db, $id, $teamLeaderIdAfter); }
+            catch (InvalidArgumentException $e) { jsonError($e->getMessage()); }
+        }
+
+        // 카톡방 URL 정규화
+        $kakaoProvided = array_key_exists('kakao_room_url', $input);
+        $kakaoNormalized = null;
+        if ($kakaoProvided) {
+            try { $kakaoNormalized = normalizeKakaoRoomUrl($input['kakao_room_url']); }
+            catch (InvalidArgumentException $e) { jsonError($e->getMessage()); }
+        }
+
         $fields = [];
         $params = [];
         $boolFields = ['available','overseas','side_job','soriblock_basic','soriblock_advanced'];
@@ -134,6 +177,14 @@ switch ($action) {
         if (!empty($input['password'])) {
             $fields[] = "password_hash = ?";
             $params[] = password_hash($input['password'], PASSWORD_BCRYPT);
+        }
+        if ($hasLeaderField) {
+            $fields[] = "team_leader_id = ?";
+            $params[] = $teamLeaderIdAfter;
+        }
+        if ($kakaoProvided) {
+            $fields[] = "kakao_room_url = ?";
+            $params[] = $kakaoNormalized;
         }
         if (empty($fields)) jsonError('변경할 항목이 없습니다');
 
