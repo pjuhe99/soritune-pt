@@ -1,11 +1,13 @@
-/* PT 알림톡 페이지 스타일 — 전역 클래스 prefix `notify-` */
+/* PT 알림톡 페이지 스타일 — 전역 클래스 prefix `notify-`
+ * PT 다크 테마(style.css의 :root 변수) 사용. */
 
 .notify-card {
-  background: #fff;
-  border: 1px solid #e3e6ea;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 16px 20px;
   margin-bottom: 16px;
+  color: var(--text);
 }
 
 .notify-card-head {
@@ -18,11 +20,12 @@
 .notify-card-head h3 {
   margin: 0;
   font-size: 16px;
+  color: var(--text);
 }
 
 .notify-key {
   font-size: 12px;
-  color: #888;
+  color: var(--text-muted);
   font-weight: normal;
   margin-left: 8px;
 }
@@ -33,12 +36,15 @@
   align-items: center;
   cursor: pointer;
   font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .notify-desc {
-  color: #555;
+  color: var(--text-secondary);
   margin: 4px 0 12px;
   font-size: 13px;
+  white-space: pre-line;
+  line-height: 1.5;
 }
 
 .notify-meta {
@@ -46,18 +52,19 @@
   gap: 16px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
   margin-bottom: 12px;
 }
 
 .notify-meta code {
-  background: #f5f5f7;
+  background: var(--surface-hover);
+  color: var(--text);
   padding: 2px 6px;
   border-radius: 4px;
 }
 
 .notify-running {
-  color: #b9770e;
+  color: #f5b041;
   font-weight: 600;
 }
 
@@ -72,23 +79,26 @@
 }
 
 .notify-error {
-  color: #c0392b;
+  color: #f1948a;
   padding: 8px 12px;
-  background: #fdedec;
+  background: rgba(192, 57, 43, 0.18);
+  border: 1px solid rgba(192, 57, 43, 0.4);
   border-radius: 4px;
 }
 
 .notify-success {
-  color: #196f3d;
+  color: #82e0aa;
   padding: 8px 12px;
-  background: #e9f7ef;
+  background: rgba(25, 111, 61, 0.18);
+  border: 1px solid rgba(25, 111, 61, 0.4);
   border-radius: 4px;
 }
 
 .notify-warn {
-  color: #b9770e;
+  color: #f5b041;
   padding: 8px 12px;
-  background: #fef9e7;
+  background: rgba(185, 119, 14, 0.18);
+  border: 1px solid rgba(185, 119, 14, 0.4);
   border-radius: 4px;
   margin-top: 8px;
 }
@@ -96,7 +106,7 @@
 .notify-empty {
   padding: 16px;
   text-align: center;
-  color: #888;
+  color: var(--text-muted);
 }
 
 .notify-stats {
@@ -105,20 +115,21 @@
   margin-bottom: 12px;
   font-size: 13px;
   flex-wrap: wrap;
+  color: var(--text);
 }
 
 .notify-stats .notify-unknown-stat {
-  color: #c0392b;
+  color: #f1948a;
 }
 
 .notify-stats .notify-cooldown-stat {
-  color: #888;
+  color: var(--text-muted);
 }
 
 .notify-stats .notify-env {
   margin-left: auto;
-  background: #fef9e7;
-  color: #b9770e;
+  background: rgba(185, 119, 14, 0.22);
+  color: #f5b041;
   padding: 2px 8px;
   border-radius: 4px;
   font-weight: 600;
@@ -129,67 +140,70 @@
   border-collapse: collapse;
   font-size: 13px;
   margin-bottom: 12px;
+  color: var(--text);
 }
 
 .notify-table th,
 .notify-table td {
   padding: 6px 8px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border);
   text-align: left;
 }
 
 .notify-table th {
-  background: #fafafa;
+  background: var(--surface-hover);
   font-weight: 600;
+  color: var(--text);
 }
 
 .notify-table tr.notify-unknown {
-  background: #fdedec;
+  background: rgba(192, 57, 43, 0.18);
 }
 
 .notify-table tr.notify-cooldown {
-  color: #888;
+  color: var(--text-muted);
 }
 
 .notify-table .notify-ok {
-  color: #196f3d;
+  color: #82e0aa;
 }
 
 .notify-table tr.notify-msg-sent {
-  background: #f1f9f5;
+  background: rgba(25, 111, 61, 0.14);
 }
 
 .notify-table tr.notify-msg-failed {
-  background: #fdedec;
+  background: rgba(192, 57, 43, 0.18);
 }
 
 .notify-table tr.notify-msg-skipped {
-  color: #888;
+  color: var(--text-muted);
 }
 
 .notify-table tr.notify-msg-dry_run {
-  background: #fef9e7;
+  background: rgba(185, 119, 14, 0.18);
 }
 
 .notify-template-preview {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 8px 12px;
   margin-bottom: 12px;
+  color: var(--text-secondary);
 }
 
 .notify-template-preview pre {
   margin: 6px 0 0;
   white-space: pre-wrap;
   font-size: 12px;
-  color: #444;
+  color: var(--text);
 }
 
 .notify-dispatch {
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -200,11 +214,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  color: var(--text-secondary);
 }
 
 .notify-dispatch input[type="text"] {
   padding: 4px 8px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
   border-radius: 4px;
   margin-left: 4px;
   font-size: 13px;
