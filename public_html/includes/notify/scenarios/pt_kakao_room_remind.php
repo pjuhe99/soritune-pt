@@ -33,9 +33,10 @@ return [
         'fallback_lms' => false,
         'variables' => [
             // notify_functions.php::notifyRenderVariables 형식: '#{변수}' => 'col:컬럼' | 'const:값'
-            '#{회원}'        => 'col:회원',
-            '#{담당 코치}'   => 'col:담당 코치',
-            '#{채팅방 링크}' => 'col:채팅방 링크',
+            // 솔라피 템플릿 변수명은 공백 없음(#{담당코치}, #{채팅방링크}). columns 키는 어댑터 내부 표기 유지.
+            '#{회원}'      => 'col:회원',
+            '#{담당코치}'  => 'col:담당 코치',
+            '#{채팅방링크}' => 'col:채팅방 링크',
         ],
     ],
 
