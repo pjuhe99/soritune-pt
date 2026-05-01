@@ -41,8 +41,14 @@ return [
     'cohort_mode' => 'current_month_kst',     // 매월 자동 동적
   ],
   'template' => [
-    'templateId' => 'KA01TP260429031809566vKO0c8WyDAl',
-    'variables' => ['회원', '담당 코치', '채팅방 링크'],
+    'templateId'   => 'KA01TP260429031809566vKO0c8WyDAl',
+    'fallback_lms' => false,
+    'variables' => [
+      // notify_functions.php::notifyRenderVariables 형식: '#{변수}' => 'col:컬럼명' | 'const:값'
+      '#{회원}'        => 'col:회원',
+      '#{담당 코치}'   => 'col:담당 코치',
+      '#{채팅방 링크}' => 'col:채팅방 링크',
+    ],
   ],
   'schedule' => '0 19 * * *',   // 매일 19:00 KST
   'cooldown_hours' => 23,        // 매일 1회 도배 방지 (cron 분 단위 흔들림 흡수)
@@ -153,37 +159,28 @@ dispatcher 인터페이스 준수:
 
 ## 4. 시나리오 description 어드민 표시
 
-### 4.1 변경 파일 4개
+코드 인스펙션 결과 알림톡 인프라가 이미 description을 fully 지원하고 있다 (boot에서 그대로 복사된 부분). 따라서 본 작업의 UI 변경은 **scenario_registry 옵셔널 type 검증 1개**만이다.
 
-1. **`includes/notify/scenario_registry.php`**
-   - `notifyValidateScenario()`: `description`은 필수 아님. `description`이 있으면 string 타입만 검증.
+### 4.1 이미 지원되는 부분 (변경 불필요)
 
-2. **`api/services/notify.php`** (시나리오 list 액션)
-   - 응답에 `description` 필드 추가 (시나리오 정의에서 그대로 가져옴).
+- **`api/services/notify.php`** (line 31): list 응답에 `'description' => $def['description'] ?? ''` 이미 포함.
+- **`admin/js/pages/notify.js::_renderCard`** (line ~33): `<p class="notify-desc">${UI.esc(s.description)}</p>` 이미 렌더.
+- **`assets/css/notify.css`**: `.notify-desc` 클래스 이미 정의 (line 38). 줄바꿈 보존이 필요하면 CSS에 `white-space: pre-line;` 추가만 검토.
 
-3. **`admin/js/pages/notify.js`** (시나리오 카드 렌더)
-   - 카드 이름(`<h3>`) 바로 아래 한 줄 회색 작은 글씨로 description 표시.
-   - `s.description`이 비어 있으면 줄 자체를 그리지 않음 (기존 시나리오 호환).
+### 4.2 추가할 변경 1개
 
-4. **`assets/css/notify.css`** — 신규 클래스 추가 (아래 §4.2).
-
-### 4.2 CSS
-
-`assets/css/notify.css`에 추가:
-
-```css
-.notify-scenario-desc {
-  font-size: .85em;
-  color: #666;
-  margin: -4px 0 8px;
-  line-height: 1.4;
-  white-space: pre-line;   /* 시나리오 description의 줄바꿈 살리기 */
+**`includes/notify/scenario_registry.php::notifyValidateScenario()`**:
+```php
+if (array_key_exists('description', $def) && !is_string($def['description'])) {
+    throw new RuntimeException("시나리오 '{$keyLabel}': 'description'은 string이어야 함");
 }
 ```
+- 옵셔널 필드. 없으면 통과 (boot 시나리오 호환).
+- 있으면 string 강제 (배열/객체로 잘못 적은 typo 조기 발견).
 
 ### 4.3 호환성
 
-- 기존 시나리오(`_smoke_test.php` 등)에 `description` 필드가 없어도 빈 문자열로 안전 처리.
+- 기존 boot의 form_reminder_ot 시나리오와 PT의 향후 시나리오 모두 호환.
 - DB 변경 없음.
 
 ## 5. DEV DB 테스트 시드
