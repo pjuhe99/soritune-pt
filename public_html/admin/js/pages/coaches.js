@@ -19,6 +19,7 @@ App.registerPage('coaches', {
     const res = await API.get('/api/coaches.php?action=list');
     if (!res.ok) return;
     const coaches = res.data.coaches;
+    this.coaches = coaches;  // 모달에서 팀장 옵션 생성용
 
     if (coaches.length === 0) {
       document.getElementById('coachList').innerHTML =
@@ -44,6 +45,7 @@ App.registerPage('coaches', {
               <th>생년월일</th>
               <th>입사일</th>
               <th>직급</th>
+              <th>팀</th>
               <th>평가</th>
               <th>상태</th>
               <th>배정</th>
@@ -56,13 +58,21 @@ App.registerPage('coaches', {
             </tr>
           </thead>
           <tbody>
-            ${coaches.map(c => `
+            ${coaches.map(c => {
+              const isLead = c.team_leader_id != null && Number(c.team_leader_id) === Number(c.id);
+              const teamCell = c.team_leader_id == null
+                ? '-'
+                : (isLead
+                    ? `<span style="color:#FF5E00;font-weight:700">★ ${UI.esc(c.team_leader_name)}팀</span>`
+                    : `${UI.esc(c.team_leader_name)}팀`);
+              return `
               <tr>
                 <td>${UI.esc(c.coach_name)}</td>
                 <td>${UI.esc(c.korean_name || '')}</td>
                 <td>${UI.esc(c.birthdate || '-')}</td>
                 <td>${UI.esc(c.hired_on || '-')}</td>
                 <td>${UI.esc(c.role || '-')}</td>
+                <td>${teamCell}</td>
                 <td>${evalBadge(c.evaluation)}</td>
                 <td>${UI.statusBadge(c.status)}</td>
                 <td>${c.available == 1 ? '<span style="color:var(--success)">가능</span>' : '<span style="color:var(--text-secondary)">불가</span>'}</td>
@@ -75,7 +85,8 @@ App.registerPage('coaches', {
                   <button class="btn btn-small btn-secondary" onclick="App.pages.coaches.showForm(${c.id})">편집</button>
                 </td>
               </tr>
-            `).join('')}
+            `;
+            }).join('')}
           </tbody>
         </table>
       </div>
@@ -87,6 +98,7 @@ App.registerPage('coaches', {
       login_id: '', coach_name: '', korean_name: '', birthdate: '', hired_on: '',
       role: '', evaluation: '', status: 'active', available: 1, max_capacity: 0, memo: '',
       overseas: 0, side_job: 0, soriblock_basic: 0, soriblock_advanced: 0,
+      team_leader_id: null, kakao_room_url: '',
     };
     if (coachId) {
       const res = await API.get(`/api/coaches.php?action=get&id=${coachId}`);
@@ -97,6 +109,21 @@ App.registerPage('coaches', {
     const roleOptions = this.ROLE_OPTIONS.map(r =>
       `<option value="${UI.esc(r)}" ${coach.role === r ? 'selected' : ''}>${UI.esc(r)}</option>`
     ).join('');
+
+    const isLeader = isEdit && coach.team_leader_id != null
+                     && Number(coach.team_leader_id) === Number(coach.id);
+    // 비활성이지만 현재 이 코치의 leader로 지정된 팀장은 옵션에 남겨야 함 (자동 미배정 방지)
+    const leaderOptions = (this.coaches || [])
+      .filter(c => Number(c.team_leader_id) === Number(c.id)
+                && Number(c.id) !== Number(coach.id)
+                && (c.status === 'active' || Number(c.id) === Number(coach.team_leader_id)))
+      .map(c => {
+        const inactiveTag = c.status !== 'active' ? ' (비활성)' : '';
+        const sel = Number(coach.team_leader_id) === Number(c.id) ? 'selected' : '';
+        return `<option value="${c.id}" ${sel}>${UI.esc(c.coach_name)}팀${inactiveTag}</option>`;
+      })
+      .join('');
+
     const chk = (name, label) => `
       <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer">
         <input type="checkbox" name="${name}" value="1" ${coach[name] == 1 ? 'checked' : ''}>
@@ -164,6 +191,20 @@ App.registerPage('coaches', {
             <label class="form-label">최대 담당 인원</label>
             <input class="form-input" type="number" name="max_capacity" value="${coach.max_capacity}" min="0">
           </div>
+          <div class="form-group">
+            <label class="form-label">팀장 여부</label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;padding:8px 0">
+              <input type="checkbox" name="is_team_leader" value="1" id="isTeamLeaderChk" ${isLeader ? 'checked' : ''}>
+              팀장으로 지정 (본인 이름의 팀이 자동 생성)
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="form-label">소속 팀</label>
+            <select class="form-select" name="team_leader_id" id="teamLeaderSelect" ${isLeader ? 'disabled' : ''}>
+              <option value="">(미배정)</option>
+              ${leaderOptions}
+            </select>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">속성</label>
@@ -173,6 +214,13 @@ App.registerPage('coaches', {
             ${chk('soriblock_basic', '소리블럭 기본')}
             ${chk('soriblock_advanced', '소리블럭 심화')}
           </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">1:1PT 카톡방 링크</label>
+          <input class="form-input" type="url" name="kakao_room_url"
+                 value="${UI.esc(coach.kakao_room_url || '')}"
+                 placeholder="https://open.kakao.com/o/...">
+          <div id="kakaoUrlError" style="display:none;color:var(--text-negative);font-size:12px;margin-top:4px"></div>
         </div>
         <div class="form-group">
           <label class="form-label">메모</label>
@@ -186,6 +234,16 @@ App.registerPage('coaches', {
       </form>
     `);
 
+    // 팀장 체크박스 ↔ 소속 팀 드롭다운 상호작용
+    const leaderChk = document.getElementById('isTeamLeaderChk');
+    const leaderSel = document.getElementById('teamLeaderSelect');
+    if (leaderChk && leaderSel) {
+      leaderChk.addEventListener('change', () => {
+        leaderSel.disabled = leaderChk.checked;
+        if (leaderChk.checked) leaderSel.value = '';
+      });
+    }
+
     document.getElementById('coachForm').addEventListener('submit', async e => {
       e.preventDefault();
       const form = e.target;
@@ -196,6 +254,24 @@ App.registerPage('coaches', {
       ['overseas','side_job','soriblock_basic','soriblock_advanced'].forEach(k => {
         body[k] = form.elements[k].checked ? 1 : 0;
       });
+      // is_team_leader/team_leader_id는 form.elements 직접 읽기 (FormData는 disabled select 누락)
+      body.is_team_leader = form.elements.is_team_leader.checked ? 1 : 0;
+      body.team_leader_id = body.is_team_leader
+        ? null
+        : (form.elements.team_leader_id.value || null);
+      body.kakao_room_url = (body.kakao_room_url || '').trim() || null;
+
+      // 클라이언트 검증 (서버와 동일 정규식)
+      const errEl = document.getElementById('kakaoUrlError');
+      errEl.style.display = 'none';
+      if (body.kakao_room_url) {
+        const re = /^https:\/\/open\.kakao\.com\/(o|me)\/[A-Za-z0-9_]+$/;
+        if (!re.test(body.kakao_room_url)) {
+          errEl.textContent = '카톡방 링크 형식이 올바르지 않습니다 (https://open.kakao.com/o/... 또는 /me/...)';
+          errEl.style.display = 'block';
+          return;
+        }
+      }
       if (isEdit && !body.password) delete body.password;
 
       const url = isEdit
