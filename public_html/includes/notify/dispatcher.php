@@ -8,6 +8,7 @@ require_once __DIR__ . '/notify_functions.php';
 require_once __DIR__ . '/scenario_registry.php';
 require_once __DIR__ . '/source_google_sheet.php';
 require_once __DIR__ . '/source_pt_sheet_member.php';
+require_once __DIR__ . '/source_pt_orders_query.php';
 require_once __DIR__ . '/solapi_client.php';
 
 /**
@@ -306,6 +307,7 @@ function notifyFetchRows(array $def): array {
     return match ($type) {
         'google_sheet' => notifySourceGoogleSheet($def['source']),
         'pt_sheet_member' => notifySourcePtSheetMember($def['source']),
+        'pt_orders_query' => notifySourcePtOrdersQuery($def['source']),
         default => throw new RuntimeException("미지원 source.type: '{$type}'"),
     };
 }

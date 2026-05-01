@@ -49,6 +49,9 @@ function notifyValidateScenario(array $def): void {
             throw new RuntimeException("시나리오 '{$keyLabel}': template.{$f} 필수");
         }
     }
+    if (array_key_exists('description', $def) && !is_string($def['description'])) {
+        throw new RuntimeException("시나리오 '{$keyLabel}': 'description'은 string이어야 함");
+    }
 }
 
 /**

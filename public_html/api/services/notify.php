@@ -223,6 +223,12 @@ function handleNotifySendNow($method) {
     $rowKeys = json_decode((string)$preview['row_keys'], true);
     if (!is_array($rowKeys)) $rowKeys = [];
 
+    // dry_run은 body가 명시적으로 보내면 우선, 없으면 preview에 락인된 값 사용.
+    // 사용자가 미리보기 화면의 체크박스를 토글한 결과를 발송 시작 시점에 반영하기 위함.
+    $effectiveDryRun = array_key_exists('dry_run', $input)
+        ? (bool)$input['dry_run']
+        : (bool)$preview['dry_run'];
+
     // preview.used_at이 이미 커밋됐으므로 이 시점에서 throw 나면 사용자는 새 preview를 만들어야 함.
     // blank 500 대신 JSON 에러로 일관된 응답 보장.
     try {
@@ -231,7 +237,7 @@ function handleNotifySendNow($method) {
             $scenarios[$preview['scenario_key']],
             'manual',
             (string)$admin['login_id'],
-            (bool)$preview['dry_run'],
+            $effectiveDryRun,
             $rowKeys,
             (bool)($preview['bypass_cooldown']     ?? false),
             (bool)($preview['bypass_max_attempts'] ?? false)

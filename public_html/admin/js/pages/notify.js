@@ -51,8 +51,12 @@ App.registerPage('notify', {
           ${s.is_running ? '<span class="notify-running">진행 중</span>' : ''}
         </div>
         <div class="notify-actions">
-          <button class="btn btn-small" onclick="App.pages.notify.preview('${UI.esc(s.key)}')">미리보기</button>
+          <button class="btn btn-small btn-secondary" onclick="App.pages.notify.preview('${UI.esc(s.key)}')">미리보기</button>
           <button class="btn btn-small btn-outline" onclick="App.pages.notify.loadBatches('${UI.esc(s.key)}')">배치이력</button>
+          <span class="notify-bypass-group">
+            <label><input type="checkbox" id="notify-bypass-cd-${UI.esc(s.key)}"> 쿨다운 무시</label>
+            <label><input type="checkbox" id="notify-bypass-mx-${UI.esc(s.key)}"> 최대횟수 무시</label>
+          </span>
         </div>
         <div class="notify-result" id="notify-result-${UI.esc(s.key)}"></div>
       </div>
@@ -72,7 +76,14 @@ App.registerPage('notify', {
   async preview(key) {
     const result = document.getElementById(`notify-result-${key}`);
     result.innerHTML = '<div class="loading">미리보기 생성 중...</div>';
-    const res = await API.post('/api/notify.php?action=preview', { key });
+    const bypassCd = document.getElementById(`notify-bypass-cd-${key}`)?.checked ?? false;
+    const bypassMx = document.getElementById(`notify-bypass-mx-${key}`)?.checked ?? false;
+    const body = {
+      key,
+      bypass_cooldown: bypassCd ? 1 : 0,
+      bypass_max_attempts: bypassMx ? 1 : 0,
+    };
+    const res = await API.post('/api/notify.php?action=preview', body);
     if (!res.ok) {
       result.innerHTML = `<div class="notify-error">${UI.esc(res.message || '미리보기 실패')}</div>`;
       return;
@@ -99,6 +110,8 @@ App.registerPage('notify', {
           <span>발송 대상: <strong>${cands.length}</strong></span>
           <span class="notify-unknown-stat">제외(unknown phone): <strong>${unknownCount}</strong></span>
           <span class="notify-cooldown-stat">cooldown/max skip: <strong>${skips.length - unknownCount}</strong></span>
+          ${d.bypass_cooldown ? '<span class="notify-bypass-tag">쿨다운 무시</span>' : ''}
+          ${d.bypass_max_attempts ? '<span class="notify-bypass-tag">최대횟수 무시</span>' : ''}
           <span class="notify-env">${UI.esc(d.environment || '')}</span>
         </div>
         <table class="notify-table">
