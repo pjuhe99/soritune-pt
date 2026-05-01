@@ -85,6 +85,31 @@
   accent-color: var(--accent);
 }
 
+.notify-bypass-group {
+  display: inline-flex;
+  gap: 12px;
+  align-items: center;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.notify-bypass-group label {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.notify-bypass-tag {
+  background: rgba(255, 94, 0, 0.18);
+  color: #ffa42b;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .notify-result {
   margin-top: 12px;
 }
