@@ -51,7 +51,7 @@ App.registerPage('notify', {
           ${s.is_running ? '<span class="notify-running">진행 중</span>' : ''}
         </div>
         <div class="notify-actions">
-          <button class="btn btn-small" onclick="App.pages.notify.preview('${UI.esc(s.key)}')">미리보기</button>
+          <button class="btn btn-small btn-secondary" onclick="App.pages.notify.preview('${UI.esc(s.key)}')">미리보기</button>
           <button class="btn btn-small btn-outline" onclick="App.pages.notify.loadBatches('${UI.esc(s.key)}')">배치이력</button>
         </div>
         <div class="notify-result" id="notify-result-${UI.esc(s.key)}"></div>

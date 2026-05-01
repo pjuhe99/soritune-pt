@@ -74,6 +74,17 @@
   margin-bottom: 8px;
 }
 
+/* btn-* 색상 클래스가 누락된 카드 내부 버튼의 안전망: 다크 톤 보장 */
+.notify-card .btn:not(.btn-primary):not(.btn-outline):not(.btn-secondary):not(.btn-danger) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* 다크 테마에서 체크박스 색상 (브라우저 default가 흰 박스로 안 보일 수 있음) */
+.notify-card input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
 .notify-result {
   margin-top: 12px;
 }
