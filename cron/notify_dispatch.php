@@ -10,6 +10,11 @@ if (php_sapi_name() !== 'cli') {
     exit('CLI only');
 }
 
+// PHP 기본 timezone이 UTC인 환경에서 schedule cron 매칭이 KST 기준으로
+// 동작하도록 명시. 시스템 cron은 OS 시간(KST)에 호출되지만 dispatcher가
+// date('H')로 시간 추출하므로 PHP timezone과 어긋나면 매칭 실패함.
+date_default_timezone_set('Asia/Seoul');
+
 require_once __DIR__ . '/../public_html/includes/db.php';
 require_once __DIR__ . '/../public_html/includes/notify/dispatcher.php';
 
