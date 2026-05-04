@@ -98,8 +98,8 @@ CoachApp.registerPage('team', {
         <h1 class="page-title" id="teamDetailTitle">불러오는 중...</h1>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:16px">
-        <button class="btn btn-small" id="tabNotes">면담 기록</button>
-        <button class="btn btn-small btn-outline" id="tabAttendance">코치 교육 출석</button>
+        <button class="btn btn-primary btn-small" id="tabNotes">면담 기록</button>
+        <button class="btn btn-outline btn-small" id="tabAttendance">코치 교육 출석</button>
       </div>
       <div id="teamDetailBody"><div class="loading">불러오는 중...</div></div>
     `;
@@ -132,8 +132,10 @@ CoachApp.registerPage('team', {
     this._activeTab = tab;
     const notesBtn = document.getElementById('tabNotes');
     const attBtn   = document.getElementById('tabAttendance');
+    notesBtn.classList.toggle('btn-primary', tab === 'notes');
     notesBtn.classList.toggle('btn-outline', tab !== 'notes');
-    attBtn.classList.toggle('btn-outline',   tab !== 'attendance');
+    attBtn.classList.toggle('btn-primary', tab === 'attendance');
+    attBtn.classList.toggle('btn-outline', tab !== 'attendance');
     if (tab === 'notes') this.renderNotesTab();
     else this.renderAttendanceTab();
   },
