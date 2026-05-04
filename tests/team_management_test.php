@@ -45,3 +45,24 @@ t_assert_eq(
 
 t_section('recentTrainingDates — N=8');
 t_assert_eq(8, count(recentTrainingDates($thu, 8, 4)), 'N개수 그대로');
+
+require_once __DIR__ . '/../public_html/includes/coach_team_guard.php';
+
+t_section('coachIsMyMember — 같은 팀이면 true');
+$db = getDB();
+// 시드: Kel(팀장) — Lulu/Ella/... (같은 팀)
+$kelId  = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Kel'")->fetchColumn();
+$luluId = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Lulu'")->fetchColumn();
+$nanaId = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Nana'")->fetchColumn();
+$hyunId = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Hyun'")->fetchColumn();
+
+t_assert_true(coachIsMyMember($db, $kelId, $luluId), 'Kel→Lulu 같은 팀');
+t_assert_true(coachIsMyMember($db, $kelId, $kelId),  'Kel→Kel 자기 자신도 true');
+t_assert_eq(false, coachIsMyMember($db, $kelId, $hyunId), 'Kel→Hyun(Nana팀) false');
+t_assert_eq(false, coachIsMyMember($db, $kelId, 99999),   '존재하지 않는 coach_id false');
+
+t_section('coachIsLeader — 자기 팀장이면 true');
+t_assert_true(coachIsLeader($db, $kelId),  'Kel은 팀장');
+t_assert_true(coachIsLeader($db, $nanaId), 'Nana는 팀장');
+t_assert_eq(false, coachIsLeader($db, $luluId), 'Lulu는 팀장 아님');
+t_assert_eq(false, coachIsLeader($db, 99999),   '존재하지 않는 coach_id false');
