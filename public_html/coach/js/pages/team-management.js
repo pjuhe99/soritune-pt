@@ -263,9 +263,70 @@ CoachApp.registerPage('team', {
     }
   },
 
-  // Task 13에서 채움
   async renderAttendanceTab() {
-    document.getElementById('teamDetailBody').innerHTML =
-      `<div class="empty-state">출석 탭 (구현 예정)</div>`;
+    const coachId = this._currentCoachId;
+    const body = document.getElementById('teamDetailBody');
+    body.innerHTML = `<div class="loading">불러오는 중...</div>`;
+
+    const res = await API.get(`/api/coach_training_attendance.php?action=history&coach_id=${coachId}`);
+    if (!res.ok) {
+      body.innerHTML = `<div class="empty-state">${UI.esc(res.message || '오류')}</div>`;
+      return;
+    }
+    const { recent, earlier, attended_count, total_count, attendance_rate } = res.data;
+    const pct = Math.round((attendance_rate || 0) * 100);
+
+    body.innerHTML = `
+      <div class="card" style="padding:16px;margin-bottom:16px">
+        <div style="font-size:14px;color:var(--text-secondary);margin-bottom:6px">직전 4주</div>
+        <div style="font-size:24px;font-weight:700">${attended_count}/${total_count} (${pct}%)</div>
+      </div>
+      <div class="card" style="padding:0;margin-bottom:12px">
+        <div style="padding:8px 14px;font-size:12px;color:var(--text-secondary);border-bottom:1px solid var(--border,#4d4d4d)">분모 회차</div>
+        <div id="attRecentList">${recent.map(r => this.renderAttendanceRow(r, true)).join('')}</div>
+      </div>
+      <div class="card" style="padding:0">
+        <div style="padding:8px 14px;font-size:12px;color:var(--text-secondary);border-bottom:1px solid var(--border,#4d4d4d)">더 이전 회차</div>
+        <div id="attEarlierList">${earlier.map(r => this.renderAttendanceRow(r, false)).join('')}</div>
+      </div>
+    `;
+    body.querySelectorAll('[data-att-toggle]').forEach(cb => {
+      cb.addEventListener('change', e => this.handleAttendanceToggle(e));
+    });
+  },
+
+  renderAttendanceRow(row, isRecent) {
+    const checked = row.attended ? 'checked' : '';
+    const labelStyle = row.attended ? '' : 'color:var(--text-secondary)';
+    return `
+      <label style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border,#2a2a2a);cursor:pointer">
+        <span style="${labelStyle}">${UI.esc(row.date)} (목)</span>
+        <span>
+          <input type="checkbox" data-att-toggle data-date="${UI.esc(row.date)}" ${checked}>
+          <span style="margin-left:6px;${labelStyle}">${row.attended ? '출석' : '결석'}</span>
+        </span>
+      </label>
+    `;
+  },
+
+  async handleAttendanceToggle(ev) {
+    const cb = ev.target;
+    const date = cb.dataset.date;
+    const wantAttended = cb.checked;
+    cb.disabled = true;
+
+    const res = await API.post('/api/coach_training_attendance.php?action=toggle', {
+      coach_id: this._currentCoachId,
+      training_date: date,
+      attended: wantAttended ? 1 : 0,
+    });
+    cb.disabled = false;
+    if (!res.ok) {
+      alert(res.message || '실패');
+      cb.checked = !wantAttended; // rollback
+      return;
+    }
+    // 헤드라인 + 라벨 갱신은 전체 다시 그리기로 단순화
+    await this.renderAttendanceTab();
   },
 });
