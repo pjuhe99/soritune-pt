@@ -90,9 +90,107 @@ CoachApp.registerPage('team', {
     return `<span style="display:inline-block;vertical-align:middle">${cells.join('')}</span>`;
   },
 
-  // Task 11에서 구현
-  renderDetail(coachId) {
-    document.getElementById('pageContent').innerHTML =
-      `<div class="empty-state">상세 페이지 (구현 예정) — coach_id=${coachId}</div>`;
+  async renderDetail(coachId) {
+    // shell
+    document.getElementById('pageContent').innerHTML = `
+      <div class="page-header" style="display:flex;align-items:center;gap:12px">
+        <a href="#team" style="color:var(--text-secondary);text-decoration:none">← 팀원 관리</a>
+        <h1 class="page-title" id="teamDetailTitle">불러오는 중...</h1>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button class="btn btn-small" id="tabNotes">면담 기록</button>
+        <button class="btn btn-small btn-outline" id="tabAttendance">코치 교육 출석</button>
+      </div>
+      <div id="teamDetailBody"><div class="loading">불러오는 중...</div></div>
+    `;
+    this._currentCoachId = coachId;
+    this._activeTab = 'notes';
+
+    // 코치 메타 (팀 overview 재사용)
+    const ov = await API.get('/api/coach_self.php?action=team_overview');
+    if (!ov.ok) {
+      document.getElementById('teamDetailBody').innerHTML =
+        `<div class="empty-state">${UI.esc(ov.message || '오류')}</div>`;
+      return;
+    }
+    const m = ov.data.members.find(x => (x.coach_id|0) === (coachId|0));
+    if (!m) {
+      document.getElementById('teamDetailBody').innerHTML =
+        `<div class="empty-state">팀원이 아닙니다</div>`;
+      return;
+    }
+    document.getElementById('teamDetailTitle').textContent =
+      `${m.coach_name}${m.korean_name ? ` (${m.korean_name})` : ''}`;
+
+    document.getElementById('tabNotes').onclick      = () => this.switchTab('notes');
+    document.getElementById('tabAttendance').onclick = () => this.switchTab('attendance');
+
+    await this.renderNotesTab();
+  },
+
+  switchTab(tab) {
+    this._activeTab = tab;
+    const notesBtn = document.getElementById('tabNotes');
+    const attBtn   = document.getElementById('tabAttendance');
+    notesBtn.classList.toggle('btn-outline', tab !== 'notes');
+    attBtn.classList.toggle('btn-outline',   tab !== 'attendance');
+    if (tab === 'notes') this.renderNotesTab();
+    else this.renderAttendanceTab();
+  },
+
+  async renderNotesTab() {
+    const coachId = this._currentCoachId;
+    const body = document.getElementById('teamDetailBody');
+    body.innerHTML = `<div class="loading">불러오는 중...</div>`;
+
+    const res = await API.get(`/api/coach_meeting_notes.php?action=list&coach_id=${coachId}`);
+    if (!res.ok) {
+      body.innerHTML = `<div class="empty-state">${UI.esc(res.message || '오류')}</div>`;
+      return;
+    }
+    const notes = res.data.notes;
+    const cards = notes.length === 0
+      ? `<div class="empty-state">면담 기록 없음</div>`
+      : notes.map(n => this.renderNoteCard(n)).join('');
+
+    body.innerHTML = `
+      <div style="margin-bottom:12px">
+        <button class="btn btn-primary" id="newNoteBtn">+ 새 면담 기록</button>
+      </div>
+      <div id="notesList">${cards}</div>
+    `;
+    document.getElementById('newNoteBtn').onclick = () => this.openNoteModal(null);
+  },
+
+  renderNoteCard(n) {
+    const editBtns = n.can_edit
+      ? `<button class="btn btn-small" data-act="edit" data-id="${n.id}">수정</button>
+         <button class="btn btn-small btn-outline" data-act="del" data-id="${n.id}">삭제</button>`
+      : '';
+    const author = n.can_edit
+      ? ''
+      : `<span style="color:var(--text-secondary);margin-left:8px">by ${UI.esc(n.created_by_name)}</span>`;
+    return `
+      <div class="card" style="padding:14px;margin-bottom:10px"
+           data-note-id="${n.id}" data-meeting-date="${UI.esc(n.meeting_date)}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div><strong>${UI.esc(n.meeting_date)}</strong>${author}</div>
+          <div style="display:flex;gap:6px" onclick="CoachApp.pages.team.handleNoteAction(event)">
+            ${editBtns}
+          </div>
+        </div>
+        <div style="white-space:pre-wrap;font-size:14px">${UI.esc(n.notes)}</div>
+      </div>
+    `;
+  },
+
+  // Task 12에서 채움
+  openNoteModal(note) { alert('TODO Task 12'); },
+  handleNoteAction(ev) { ev.stopPropagation(); /* TODO Task 12 */ },
+
+  // Task 13에서 채움
+  async renderAttendanceTab() {
+    document.getElementById('teamDetailBody').innerHTML =
+      `<div class="empty-state">출석 탭 (구현 예정)</div>`;
   },
 });
