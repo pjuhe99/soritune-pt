@@ -70,7 +70,7 @@ CREATE TABLE `coach_meeting_notes` (
   `created_by` INT NOT NULL COMMENT '작성한 팀장 coaches.id',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX `idx_coach_date` (`coach_id`, `meeting_date` DESC, `id` DESC),
+  INDEX `idx_coach_date` (`coach_id`, `meeting_date`, `id`),
   INDEX `idx_created_by` (`created_by`),
   CONSTRAINT `fk_cmn_coach`   FOREIGN KEY (`coach_id`)   REFERENCES `coaches`(`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_cmn_creator` FOREIGN KEY (`created_by`) REFERENCES `coaches`(`id`)
@@ -223,7 +223,7 @@ CREATE TABLE `merge_logs` (
 -- 11. change_logs
 CREATE TABLE `change_logs` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `target_type` ENUM('member','order','coach_assignment','merge','retention_allocation') NOT NULL,
+  `target_type` ENUM('member','order','coach_assignment','merge','retention_allocation','meeting_note','training_attendance') NOT NULL,
   `target_id` INT NOT NULL,
   `action` VARCHAR(50) NOT NULL,
   `old_value` JSON,
