@@ -199,6 +199,49 @@ LIB_ONLY 가드: 두 신규 API 파일 모두 `if (PHP_SAPI === 'cli' || defined
 |---|---|---|---|
 | `history` (`?coach_id=X`) | GET | 코치-팀장(본인 팀원) | `assertCoachIsMyMember` |
 | `toggle` (body `{coach_id, training_date, attended:0/1}`) | POST | 코치-팀장(본인 팀원) | 위 + `training_date` 요일=COACH_TRAINING_DOW |
+| `admin_overview` | GET | 어드민 전용 | `role === 'admin'` 체크 (403 반환) |
+
+#### `coach_training_attendance.php?action=admin_overview` (어드민 전용, Task 19 추가)
+
+인증: 어드민 세션 필수. 비-어드민은 403.
+
+응답:
+```json
+{
+  "ok": true,
+  "data": {
+    "recent_dates": ["2026-04-30", "2026-04-23", "2026-04-16", "2026-04-09"],
+    "teams": [
+      {
+        "leader_id": 6,
+        "leader_name": "Kel",
+        "members": [
+          {
+            "coach_id": 6,
+            "coach_name": "Kel",
+            "korean_name": "켈",
+            "attendance": [
+              {"date": "2026-04-30", "attended": 1},
+              {"date": "2026-04-23", "attended": 0},
+              {"date": "2026-04-16", "attended": 1},
+              {"date": "2026-04-09", "attended": 1}
+            ],
+            "attended_count": 3,
+            "total_count": 4,
+            "attendance_rate": 0.75
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- 정렬: `leader_name ASC`. 팀장 본인 멤버 첫 행, 나머지 `coach_name ASC`.
+- `status='active'` 코치만 포함(팀장 + 팀원 모두).
+- `attendance` 배열은 `recent_dates` 순서(DESC)와 동일한 4-entry 배열.
+- `attendance_rate` = `round(attended_count / total_count, 4)` (분모 = `COACH_TRAINING_RECENT_COUNT` = 4 고정).
+- 라우터에서 `requireAnyAuth()` 진입 후 `admin_overview` 분기 최우선 — 기존 `requireCoach + assertIsLeader` 가드 전에 처리.
 
 `history` 응답:
 ```json
@@ -233,6 +276,7 @@ LIB_ONLY 가드: 두 신규 API 파일 모두 `if (PHP_SAPI === 'cli' || defined
 | 면담 create | ✓ | ✗ | ✗ | ✗ |
 | 면담 update/delete | ✓ (자기가 쓴 것만) | ✗ | ✗ | ✗ |
 | 출석 read/toggle | ✓ | ✗ | ✗ | ✗ |
+| 출석 read (admin_overview) | ✗ | ✗ | ✗ | ✓ |
 | `team_overview` | ✓ (본인 팀만) | (해당 없음) | ✗ | ✗ |
 
 ### 4.4 검증 규칙
@@ -402,6 +446,40 @@ SoriTune PT
 - 출석 컬럼: 선택 회차에 해당하는 `attendance[i].attended` 기준 체크박스 1개.
 - 체크박스 클릭 → `coach_training_attendance.php?action=toggle` API → 성공 시 in-memory 캐시 갱신 후 `renderBody()` 재호출 (헤드라인 갱신 포함) / 실패 시 `alert` + 롤백.
 - `attendance` 배열은 `team_overview` 응답에 이미 있음 (§4.2) — 신규 API 불필요.
+
+### 5.8 화면 5 — 어드민 `#training-attendance` 코치 교육 출석 가로 비교 (Task 19 신설)
+
+> 운영팀이 전 팀 출석을 가로 비교(어느 코치가 자주 빠지는지)할 수 있도록 어드민 사이드바에 read-only 매트릭스 페이지를 추가.
+
+```
+┌─ 코치 교육 출석 (운영) ──────────────────────────────────────────────────────────┐
+│                                                                                │
+│  ┌─ Kel팀 (10명) ─────────────────────────────────────────────────────────┐  │
+│  │ 이름       │ 한글이름 │ 04-30 │ 04-23 │ 04-16 │ 04-09 │ 출석율        │  │
+│  │────────────────────────────────────────────────────────────────────────│  │
+│  │ Kel ★     │ 켈      │   ✓   │   ✓   │   ·   │   ✓   │ 3/4 (75%)    │  │
+│  │ Lulu       │ 룰루    │   ✓   │   ·   │   ·   │   ·   │ 1/4 (25%)    │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                │
+│  ┌─ Nana팀 (10명) ────────────────────────────────────────────────────────┐  │
+│  │ ...                                                                    │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                │
+│  ★ = 팀장 · ✓ 출석 / · 결석 · 직전 4회 (목요일) · 읽기전용                       │
+└────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- 라우트: `#training-attendance` (어드민 SPA)
+- 파일: `public_html/admin/js/pages/training-attendance.js`
+- 어드민 사이드바 "카톡방 입장 체크" 다음에 "코치 교육 출석" 메뉴 추가.
+- 데이터: `coach_training_attendance.php?action=admin_overview` — 활성 팀 전체 직전 4회 매트릭스.
+- 팀별 카드 그룹핑: `leader_name ASC`. 각 카드 헤더에 팀 이름 + 멤버 수.
+- 날짜 컬럼 헤더: `MM-DD` 형식(연도 생략).
+- ✓(초록) = 출석, ·(회색) = 결석.
+- ★ = 팀장 본인(Soritune Orange).
+- 출석율 컬럼: `N/4 (NN%)`.
+- 토글/수정 UI 없음 (read-only). 어드민은 이 화면에서 데이터 변경 불가.
+- `UI.esc()` 적용, `App.registerPage('training-attendance', {...})` 패턴.
 
 ### 5.6 XSS 가드
 

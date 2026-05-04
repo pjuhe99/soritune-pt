@@ -317,3 +317,33 @@ t_assert_eq(1, $lulu['attendance'][0]['attended'], 'attendance[0] 출석');
 t_assert_eq(0, $lulu['attendance'][1]['attended'], 'attendance[1] 결석');
 $db->prepare("DELETE FROM coach_training_attendance WHERE coach_id IN (?, ?)")
    ->execute([$kelId, $luluId]);
+
+t_section('buildAdminAttendanceOverview — 팀 그룹핑 + 출석율');
+$db = getDB();
+$kelId  = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Kel'")->fetchColumn();
+$luluId = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Lulu'")->fetchColumn();
+$db->prepare("DELETE FROM coach_training_attendance WHERE coach_id IN (?, ?)")
+   ->execute([$kelId, $luluId]);
+
+$now = new DateTimeImmutable('2026-05-01 09:00:00', new DateTimeZone('Asia/Seoul'));
+toggleAttendance($db, $luluId, '2026-04-30', true, $kelId);
+
+$ov = buildAdminAttendanceOverview($db, $now);
+t_assert_eq(4, count($ov['recent_dates']), 'recent_dates 4개');
+t_assert_true(count($ov['teams']) >= 3, 'teams 3개 이상 (Kel/Nana/Flora)');
+
+// Kel 팀 찾기
+$kelTeam = array_values(array_filter($ov['teams'], fn($t) => (int)$t['leader_id'] === $kelId))[0];
+t_assert_eq('Kel', $kelTeam['leader_name'], 'leader_name');
+t_assert_true(count($kelTeam['members']) >= 2, 'Kel팀 멤버 2명+');
+t_assert_eq($kelId, (int)$kelTeam['members'][0]['coach_id'], '본인 첫 행');
+
+$lulu = array_values(array_filter($kelTeam['members'], fn($m) => (int)$m['coach_id'] === $luluId))[0];
+t_assert_eq(1, $lulu['attended_count'], 'Lulu 1회 출석');
+t_assert_eq(0.25, $lulu['attendance_rate'], '출석율 25%');
+t_assert_eq(4, count($lulu['attendance']), 'attendance 4개');
+t_assert_eq('2026-04-30', $lulu['attendance'][0]['date'], 'attendance[0] 최신');
+t_assert_eq(1, $lulu['attendance'][0]['attended'], 'attendance[0] 출석');
+
+$db->prepare("DELETE FROM coach_training_attendance WHERE coach_id IN (?, ?)")
+   ->execute([$kelId, $luluId]);

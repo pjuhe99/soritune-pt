@@ -129,15 +129,137 @@ function toggleAttendance(
     }
 }
 
+/**
+ * 어드민 전용: 활성 팀(team_leader_id=id) 전체에 대해 직전 4회 출석 매트릭스.
+ *
+ * 응답:
+ * [
+ *   'recent_dates' => ['2026-04-30', ...4 DESC],
+ *   'teams' => [
+ *     [
+ *       'leader_id' => 6, 'leader_name' => 'Kel',
+ *       'members' => [
+ *         [coach_id, coach_name, korean_name,
+ *          attendance: [{date, attended}, ...4],
+ *          attended_count, total_count, attendance_rate]
+ *       ]
+ *     ],
+ *     ...
+ *   ]
+ * ]
+ *
+ * 정렬: leader_name ASC, member 본인 첫 + 나머지 coach_name ASC.
+ * active=1 코치만 포함.
+ */
+function buildAdminAttendanceOverview(PDO $db, DateTimeImmutable $nowKst): array
+{
+    $totalCount = COACH_TRAINING_RECENT_COUNT;
+    $recentDates = recentTrainingDates($nowKst);
+
+    // 활성 팀장 (team_leader_id == id AND status='active')
+    $stmt = $db->query("
+        SELECT id, coach_name
+          FROM coaches
+         WHERE team_leader_id = id AND status = 'active'
+         ORDER BY coach_name ASC
+    ");
+    $leaders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (!$leaders) return ['recent_dates' => $recentDates, 'teams' => []];
+
+    $leaderIds = array_map(fn($l) => (int)$l['id'], $leaders);
+    $leaderIdsPh = implode(',', array_fill(0, count($leaderIds), '?'));
+
+    // 모든 팀 멤버 (active 코치 + 팀장 본인 포함)
+    $mStmt = $db->prepare("
+        SELECT id AS coach_id, coach_name, korean_name, team_leader_id
+          FROM coaches
+         WHERE team_leader_id IN ({$leaderIdsPh})
+           AND status = 'active'
+         ORDER BY team_leader_id ASC, (id = team_leader_id) DESC, coach_name ASC
+    ");
+    $mStmt->execute($leaderIds);
+    $allMembers = $mStmt->fetchAll(PDO::FETCH_ASSOC);
+    if (!$allMembers) {
+        $teams = [];
+        foreach ($leaders as $l) {
+            $teams[] = [
+                'leader_id' => (int)$l['id'],
+                'leader_name' => $l['coach_name'],
+                'members' => [],
+            ];
+        }
+        return ['recent_dates' => $recentDates, 'teams' => $teams];
+    }
+
+    $memberIds = array_map(fn($m) => (int)$m['coach_id'], $allMembers);
+    $idsPh   = implode(',', array_fill(0, count($memberIds), '?'));
+    $datesPh = implode(',', array_fill(0, count($recentDates), '?'));
+
+    // 출석 row (member별 + date별)
+    $att = $db->prepare("
+        SELECT coach_id, training_date
+          FROM coach_training_attendance
+         WHERE coach_id IN ({$idsPh})
+           AND training_date IN ({$datesPh})
+    ");
+    $att->execute(array_merge($memberIds, $recentDates));
+    $attBy = []; // [coachId][date] = 1
+    foreach ($att->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $attBy[(int)$r['coach_id']][$r['training_date']] = 1;
+    }
+
+    // 팀별 그룹핑
+    $byLeader = [];
+    foreach ($allMembers as $m) {
+        $cid = (int)$m['coach_id'];
+        $rows = $attBy[$cid] ?? [];
+        $attended = 0;
+        $attendance = [];
+        foreach ($recentDates as $d) {
+            $on = isset($rows[$d]) ? 1 : 0;
+            $attendance[] = ['date' => $d, 'attended' => $on];
+            $attended += $on;
+        }
+        $byLeader[(int)$m['team_leader_id']][] = [
+            'coach_id'         => $cid,
+            'coach_name'       => $m['coach_name'],
+            'korean_name'      => $m['korean_name'],
+            'attendance'       => $attendance,
+            'attended_count'   => $attended,
+            'total_count'      => $totalCount,
+            'attendance_rate'  => $totalCount > 0 ? round($attended / $totalCount, 4) : 0.0,
+        ];
+    }
+
+    $teams = [];
+    foreach ($leaders as $l) {
+        $lid = (int)$l['id'];
+        $teams[] = [
+            'leader_id'   => $lid,
+            'leader_name' => $l['coach_name'],
+            'members'     => $byLeader[$lid] ?? [],
+        ];
+    }
+    return ['recent_dates' => $recentDates, 'teams' => $teams];
+}
+
 // 라우터는 Task 7에서 추가
 if (PHP_SAPI === 'cli' || defined('COACH_TRAINING_ATTENDANCE_LIB_ONLY')) return;
 
 header('Content-Type: application/json; charset=utf-8');
-$user = requireCoach();
+$user = requireAnyAuth();
 $db   = getDB();
-$leaderId = (int)$user['id'];
 $action = $_GET['action'] ?? '';
 
+if ($action === 'admin_overview') {
+    if ($user['role'] !== 'admin') jsonError('관리자 권한이 필요합니다', 403);
+    $nowKst = new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul'));
+    jsonSuccess(buildAdminAttendanceOverview($db, $nowKst));
+}
+
+// 이하 액션은 코치-팀장 전용
+if ($user['role'] !== 'coach') jsonError('코치 로그인이 필요합니다', 401);
+$leaderId = (int)$user['id'];
 assertIsLeader($db, $leaderId);
 
 switch ($action) {

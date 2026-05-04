@@ -2081,3 +2081,26 @@ PROD 단계는 별도 (이 plan 외)로 진행:
 - `docs/superpowers/plans/2026-05-04-team-management.md` — Task 18 섹션 추가
 
 **회귀 테스트**: 219 PASS / 0 FAIL (backend 변경 없어 테스트 카운트 유지).
+
+---
+
+## Task 19: 어드민 코치 교육 출석 가로 비교 페이지 (read-only)
+
+> **완료일**: 2026-05-04
+
+**변경 요지**:
+- Backend: `coach_training_attendance.php`에 `buildAdminAttendanceOverview()` 함수 추가 + `admin_overview` 액션 라우팅. 라우터 진입을 `requireAnyAuth()`로 변경 후 `admin_overview` 분기 최우선 처리(기존 `requireCoach + assertIsLeader` 가드 전).
+- 어드민 사이드바(`admin/index.php`): "카톡방 입장 체크" 다음에 "코치 교육 출석" 메뉴 추가 + `training-attendance.js` 스크립트 등록.
+- 신규 `public_html/admin/js/pages/training-attendance.js`: 팀별 카드 그룹핑 + 일자별 컬럼 + ✓/· 표시 + 출석율 % + read-only.
+- Tests: `buildAdminAttendanceOverview` 검증 10 assertions 추가 (recent_dates 4개, teams 3개+, Kel팀 leader_name/멤버 본인 첫 행, Lulu 출석율 25%, attendance 4개 + 최신 날짜 + 출석 값).
+- Spec(`2026-05-04-team-management-design.md`): §4.2 `admin_overview` 액션 명세(인증/응답/정렬 규칙), §4.3 권한 행렬 "출석 read (admin_overview)" 행 추가, §5.8 어드민 화면 명세 신설.
+
+**영향받은 파일**:
+- `public_html/api/coach_training_attendance.php` — `buildAdminAttendanceOverview()` 함수 추가 + 라우터 `requireAnyAuth()` 분기
+- `public_html/admin/index.php` — 사이드바 메뉴 + 스크립트 등록
+- `public_html/admin/js/pages/training-attendance.js` — 신규 파일
+- `tests/team_management_test.php` — `buildAdminAttendanceOverview` 검증 10 assertions 추가
+- `docs/superpowers/specs/2026-05-04-team-management-design.md` — §4.2 admin_overview 명세 / §4.3 권한 행렬 / §5.8 어드민 화면
+- `docs/superpowers/plans/2026-05-04-team-management.md` — Task 19 섹션 추가
+
+**테스트 결과**: 229 PASS / 0 FAIL (219 기존 + 10 신규).
