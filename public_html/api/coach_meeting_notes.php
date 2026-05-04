@@ -138,3 +138,83 @@ function deleteMeetingNote(PDO $db, int $id, int $createdBy): bool
 
 // 라우터는 Task 5에서 추가
 if (PHP_SAPI === 'cli' || defined('COACH_MEETING_NOTES_LIB_ONLY')) return;
+
+header('Content-Type: application/json; charset=utf-8');
+$user = requireAnyAuth();
+$db   = getDB();
+$action = $_GET['action'] ?? '';
+
+switch ($action) {
+    case 'list': {
+        $coachId = (int)($_GET['coach_id'] ?? 0);
+        if (!$coachId) jsonError('coach_id가 필요합니다');
+
+        $isAdmin = $user['role'] === 'admin';
+        if (!$isAdmin) {
+            // 코치: 자기 팀 멤버만
+            assertIsLeader($db, (int)$user['id']);
+            assertCoachIsMyMember($db, (int)$user['id'], $coachId);
+        }
+
+        $notes = listMeetingNotes($db, $coachId);
+        $viewerId = (int)$user['id'];
+        foreach ($notes as &$n) {
+            $n['can_edit'] = !$isAdmin && (int)$n['created_by'] === $viewerId;
+        }
+        unset($n);
+
+        jsonSuccess(['notes' => $notes]);
+    }
+
+    case 'create': {
+        if ($user['role'] !== 'coach') jsonError('코치만 가능합니다', 403);
+        $input = getJsonInput();
+        $coachId     = (int)($input['coach_id'] ?? 0);
+        $meetingDate = (string)($input['meeting_date'] ?? '');
+        $notes       = (string)($input['notes'] ?? '');
+        if (!$coachId) jsonError('coach_id가 필요합니다');
+
+        assertIsLeader($db, (int)$user['id']);
+        assertCoachIsMyMember($db, (int)$user['id'], $coachId);
+
+        try {
+            $id = createMeetingNote($db, $coachId, (int)$user['id'], $meetingDate, $notes);
+        } catch (InvalidArgumentException $e) {
+            jsonError($e->getMessage());
+        }
+        jsonSuccess(['id' => $id]);
+    }
+
+    case 'update': {
+        if ($user['role'] !== 'coach') jsonError('코치만 가능합니다', 403);
+        $id = (int)($_GET['id'] ?? 0);
+        if (!$id) jsonError('id가 필요합니다');
+
+        $input = getJsonInput();
+        $meetingDate = (string)($input['meeting_date'] ?? '');
+        $notes       = (string)($input['notes'] ?? '');
+
+        try {
+            $ok = updateMeetingNote($db, $id, (int)$user['id'], $meetingDate, $notes);
+        } catch (InvalidArgumentException $e) {
+            jsonError($e->getMessage());
+        }
+        if (!$ok) jsonError('수정할 권한이 없거나 메모를 찾을 수 없습니다', 403);
+
+        jsonSuccess(['updated' => true]);
+    }
+
+    case 'delete': {
+        if ($user['role'] !== 'coach') jsonError('코치만 가능합니다', 403);
+        $id = (int)($_GET['id'] ?? 0);
+        if (!$id) jsonError('id가 필요합니다');
+
+        $ok = deleteMeetingNote($db, $id, (int)$user['id']);
+        if (!$ok) jsonError('삭제할 권한이 없거나 메모를 찾을 수 없습니다', 403);
+
+        jsonSuccess(['deleted' => true]);
+    }
+
+    default:
+        jsonError('알 수 없는 액션입니다', 404);
+}
