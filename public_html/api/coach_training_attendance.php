@@ -131,3 +131,42 @@ function toggleAttendance(
 
 // 라우터는 Task 7에서 추가
 if (PHP_SAPI === 'cli' || defined('COACH_TRAINING_ATTENDANCE_LIB_ONLY')) return;
+
+header('Content-Type: application/json; charset=utf-8');
+$user = requireCoach();
+$db   = getDB();
+$leaderId = (int)$user['id'];
+$action = $_GET['action'] ?? '';
+
+assertIsLeader($db, $leaderId);
+
+switch ($action) {
+    case 'history': {
+        $coachId = (int)($_GET['coach_id'] ?? 0);
+        if (!$coachId) jsonError('coach_id가 필요합니다');
+        assertCoachIsMyMember($db, $leaderId, $coachId);
+
+        $nowKst = new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul'));
+        jsonSuccess(listAttendanceHistory($db, $coachId, $nowKst));
+    }
+
+    case 'toggle': {
+        $input = getJsonInput();
+        $coachId      = (int)($input['coach_id'] ?? 0);
+        $trainingDate = (string)($input['training_date'] ?? '');
+        $attended     = !empty($input['attended']);
+        if (!$coachId) jsonError('coach_id가 필요합니다');
+
+        assertCoachIsMyMember($db, $leaderId, $coachId);
+
+        try {
+            $changed = toggleAttendance($db, $coachId, $trainingDate, $attended, $leaderId);
+        } catch (InvalidArgumentException $e) {
+            jsonError($e->getMessage());
+        }
+        jsonSuccess(['changed' => $changed, 'attended' => $attended ? 1 : 0]);
+    }
+
+    default:
+        jsonError('알 수 없는 액션입니다', 404);
+}
