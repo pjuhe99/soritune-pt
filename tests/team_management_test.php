@@ -1,0 +1,47 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../public_html/includes/coach_training.php';
+
+t_section('recentTrainingDates — 오늘이 목요일이면 오늘 포함');
+$thu = new DateTimeImmutable('2026-04-30 21:00:00', new DateTimeZone('Asia/Seoul')); // Thursday
+t_assert_eq(
+    ['2026-04-30','2026-04-23','2026-04-16','2026-04-09'],
+    recentTrainingDates($thu, 4, 4),
+    '목요일 21시 → 오늘 포함 직전 4개'
+);
+
+t_section('recentTrainingDates — 금요일은 어제(목) 포함');
+$fri = new DateTimeImmutable('2026-05-01 09:00:00', new DateTimeZone('Asia/Seoul')); // Friday
+t_assert_eq(
+    ['2026-04-30','2026-04-23','2026-04-16','2026-04-09'],
+    recentTrainingDates($fri, 4, 4),
+    '금요일 → 어제 목요일 첫 원소'
+);
+
+t_section('recentTrainingDates — 수요일은 지난 목요일이 첫 원소');
+$wed = new DateTimeImmutable('2026-04-29 12:00:00', new DateTimeZone('Asia/Seoul')); // Wednesday
+t_assert_eq(
+    ['2026-04-23','2026-04-16','2026-04-09','2026-04-02'],
+    recentTrainingDates($wed, 4, 4),
+    '수요일 → 지난 목요일'
+);
+
+t_section('recentTrainingDates — 월/연도 경계');
+$earlyJan = new DateTimeImmutable('2026-01-05 12:00:00', new DateTimeZone('Asia/Seoul')); // Monday
+t_assert_eq(
+    ['2026-01-01','2025-12-25','2025-12-18','2025-12-11'],
+    recentTrainingDates($earlyJan, 4, 4),
+    '연도 넘어가는 경계'
+);
+
+t_section('recentTrainingDates — DOW 파라미터(토요일=6)');
+$sat = new DateTimeImmutable('2026-05-02 10:00:00', new DateTimeZone('Asia/Seoul')); // Saturday
+t_assert_eq(
+    ['2026-05-02','2026-04-25','2026-04-18','2026-04-11'],
+    recentTrainingDates($sat, 4, 6),
+    '토요일 DOW로도 작동'
+);
+
+t_section('recentTrainingDates — N=8');
+t_assert_eq(8, count(recentTrainingDates($thu, 8, 4)), 'N개수 그대로');
