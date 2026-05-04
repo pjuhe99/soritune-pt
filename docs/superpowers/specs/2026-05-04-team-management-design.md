@@ -99,6 +99,8 @@ function recentTrainingDates(DateTimeImmutable $nowKst, int $n = COACH_TRAINING_
 
 요일이 바뀌면 상수 1줄만 변경. 휴강은 처음에 모델링 안 함.
 
+**분모 정책**: 출석율 분모는 항상 `COACH_TRAINING_RECENT_COUNT`(=4) 고정. 코치 입사일이 직전 4주보다 최근이라도 분모는 4로 둔다 — 1차 단순화. 운영상 의미 있는 noise가 발생하면 추후 별도 plan으로 입사일 가중치 추가.
+
 ### 3.4 마이그레이션 파일
 
 - `migrations/20260504_add_coach_meeting_notes.sql`
@@ -116,7 +118,7 @@ function recentTrainingDates(DateTimeImmutable $nowKst, int $n = COACH_TRAINING_
 | `api/coach_meeting_notes.php` (신규) | 면담 CRUD (코치-팀장 / 어드민 read) |
 | `api/coach_training_attendance.php` (신규) | 출석 history + toggle (코치-팀장 only) |
 | `includes/coach_training.php` (신규) | 상수 + `recentTrainingDates()` 순수 함수 |
-| `includes/coach_team_guard.php` (신규) | `assertIsLeader($db,$coachId)`, `assertCoachIsMyMember($db,$leaderId,$targetCoachId)` |
+| `includes/coach_team_guard.php` (신규) | `assertIsLeader`, `assertCoachIsMyMember` 공용 가드 (시그니처는 §4.6) |
 
 LIB_ONLY 가드: 두 신규 API 파일 모두 `if (PHP_SAPI === 'cli' || defined('XXX_LIB_ONLY')) return;` 라우터 분리. 단위 테스트가 함수만 require해서 사용.
 
@@ -129,7 +131,7 @@ LIB_ONLY 가드: 두 신규 API 파일 모두 `if (PHP_SAPI === 'cli' || defined
 {
   "ok": true,
   "data": {
-    "recent_dates": ["2026-05-01","2026-04-24","2026-04-17","2026-04-10"],
+    "recent_dates": ["2026-05-01","2026-04-24","2026-04-17","2026-04-10"],   // DESC, 최신 첫 원소
     "members": [
       {
         "coach_id": 12,
@@ -233,11 +235,30 @@ LIB_ONLY 가드: 두 신규 API 파일 모두 `if (PHP_SAPI === 'cli' || defined
 - `notes`: `trim` 후 1~50,000자, 빈 문자열 차단.
 - 모든 쓰기 액션은 `logChange()` 호출. `entity_type`은 `meeting_note` / `training_attendance`. payload는 메타만(`meeting_date`, `training_date` 등) — **본문 전체는 audit에 저장하지 않음**(개인정보 + 로그 비대화 방지).
 
-### 4.5 동시성 / TOCTOU
+### 4.5 공용 가드 (`includes/coach_team_guard.php`)
+
+```php
+/**
+ * $coachId가 팀장(team_leader_id == 자기 id)인지 검증.
+ * 팀장이 아니면 jsonError('팀장 권한이 필요합니다', 403) 후 exit.
+ */
+function assertIsLeader(PDO $db, int $coachId): void;
+
+/**
+ * $targetCoachId가 $leaderId 팀장의 본인 팀 멤버(같은 team_leader_id)인지 검증.
+ * 팀장 자신도 자기 팀 멤버로 통과(본인 면담은 없지만 출석은 가능).
+ * 멤버 아니면 jsonError('해당 코치에 대한 권한이 없습니다', 403) 후 exit.
+ */
+function assertCoachIsMyMember(PDO $db, int $leaderId, int $targetCoachId): void;
+```
+
+두 가드 모두 검증 실패 시 즉시 `exit` (PT 관행). 호출 직후 코드는 검증 통과를 가정.
+
+### 4.6 동시성 / TOCTOU
 
 - 팀원 소속 검증과 INSERT/UPDATE 사이에 락 미적용 — PT 관행 동일, 운영 규모 작음.
 - `update`/`delete`는 `WHERE id=? AND created_by=?` 한 문장으로 권한+row 동시 검증 (race-free).
-- 출석 `toggle`은 UNIQUE 제약 + try/catch로 race 시 1429/duplicate 처리 후 SELECT 재확인 → 멱등 응답.
+- 출석 `toggle`은 UNIQUE 제약 + try/catch로 race 시 MySQL `1062` (Duplicate entry) 처리 후 SELECT 재확인 → 멱등 응답.
 
 ## 5. UI
 
