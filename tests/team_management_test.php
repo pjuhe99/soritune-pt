@@ -256,3 +256,44 @@ $logCnt2 = (int)$db->query(
       WHERE target_type='training_attendance' AND action='mark_absent'"
 )->fetchColumn();
 t_assert_true($logCnt2 >= 1, 'mark_absent 로그 생성');
+
+t_section('team_overview 빌드 — 출석율 계산');
+const COACH_SELF_LIB_ONLY = true;
+require_once __DIR__ . '/../public_html/api/coach_self.php'; // build* helper 정의됨
+
+$db = getDB();
+$kelId  = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Kel'")->fetchColumn();
+$luluId = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Lulu'")->fetchColumn();
+
+// 시드 클린업
+$db->prepare("DELETE FROM coach_training_attendance WHERE coach_id IN (?, ?)")
+   ->execute([$kelId, $luluId]);
+
+$now = new DateTimeImmutable('2026-05-01 09:00:00', new DateTimeZone('Asia/Seoul'));
+// Lulu 4회 중 1회 출석
+toggleAttendance($db, $luluId, '2026-04-30', true, $kelId);
+
+$ov = buildTeamOverview($db, $kelId, $now);
+t_assert_eq(4, count($ov['recent_dates']), 'recent_dates 4개');
+t_assert_eq('2026-04-30', $ov['recent_dates'][0], 'recent_dates DESC');
+
+$members = $ov['members'];
+t_assert_true(count($members) >= 2, '본인 + 팀원 N>=2');
+t_assert_eq(true, (bool)$members[0]['is_self'], '첫 행 본인');
+t_assert_eq($kelId, (int)$members[0]['coach_id'], '첫 행 coach_id = 본인');
+
+$lulu = array_values(array_filter($members, fn($m) => (int)$m['coach_id'] === $luluId))[0];
+t_assert_eq(1, $lulu['attended_count'], 'Lulu 1회 출석');
+t_assert_eq(4, $lulu['total_count'],    '분모 4');
+t_assert_eq(0.25, $lulu['attendance_rate'], '출석율 25%');
+
+// 클린업
+$db->prepare("DELETE FROM coach_training_attendance WHERE coach_id IN (?, ?)")
+   ->execute([$kelId, $luluId]);
+
+t_section('team_overview — 비-팀장 호출 차단 (build 단계)');
+t_assert_throws(
+    fn() => buildTeamOverview($db, $luluId, $now), // Lulu는 비-팀장
+    RuntimeException::class,
+    'Lulu는 팀장 아님 → RuntimeException'
+);
