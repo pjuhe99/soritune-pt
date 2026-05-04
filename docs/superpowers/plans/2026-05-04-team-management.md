@@ -2058,3 +2058,26 @@ PROD 단계는 별도 (이 plan 외)로 진행:
 
 **회귀 테스트**: 219 PASS / 0 FAIL (기존 214 + 신규 5).
 - Task 14 Step 14.1은 "기존 코드 확인" 단계로 다음 step의 정확한 삽입 위치를 결정. plan에 명시적 라인 번호를 못 박은 이유: `coaches.js`가 919 lines (2026-04-30 PROD)에서 변동 가능. 실행 시 `grep -n` 으로 위치를 확인하는 절차로 plan에 명시.
+
+> **Task 17 → Task 18 전환 이유**: 일자별 4 컬럼 매트릭스는 컬럼 헤더가 매주 바뀌어 인지 부담 발생. 출석 입력을 별도 `#training-attendance` 페이지로 분리하고, 명단은 요약 모드로 복귀.
+
+---
+
+## Task 18: 코치 교육 출석 별도 페이지 + 명단 요약 복귀
+
+> **완료일**: 2026-05-04
+
+**변경 요지**:
+- 사이드바에 "코치 교육 출석" 메뉴 추가 (팀장 전용 PHP 가드)
+- 신규 `#training-attendance` 페이지: 회차 드롭다운(직전 4회, 가장 최근 default) + 팀원 한 줄씩 + 체크박스 1개. 체크 즉시 `toggle` API, 헤드라인 `출석 N/M명` 실시간 반영.
+- `#team` 명단: 일자별 4 컬럼 매트릭스 제거 → 요약 모드 복귀 (출석율 % 막대 + 면담 카운트). `attendanceBar()` 부활, `handleBulkToggle()` 제거.
+- Backend 변경 없음: `team_overview` 응답의 `attendance` 배열 그대로 재사용.
+
+**영향받은 파일**:
+- `public_html/coach/index.php` — 사이드바에 `#training-attendance` 메뉴 추가 + `training-attendance.js` 스크립트 등록 (둘 다 `$isLeader` 블록 내)
+- `public_html/coach/js/pages/team-management.js` — `renderList()` 요약 모드 복귀: `attendanceBar()` 부활, 4 컬럼 체크박스 제거, `handleBulkToggle()` 제거
+- `public_html/coach/js/pages/training-attendance.js` — 신규 파일: `CoachApp.registerPage('training-attendance', {...})`
+- `docs/superpowers/specs/2026-05-04-team-management-design.md` — §5.1 사이드바 갱신, §5.2 요약 모드 복귀 + 매트릭스 제거 명시, §5.7 신설 (`#training-attendance` 페이지 명세)
+- `docs/superpowers/plans/2026-05-04-team-management.md` — Task 18 섹션 추가
+
+**회귀 테스트**: 219 PASS / 0 FAIL (backend 변경 없어 테스트 카운트 유지).

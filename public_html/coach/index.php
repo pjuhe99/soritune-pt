@@ -78,6 +78,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
       <a href="#kakao-check" data-page="kakao-check">카톡방 입장 체크</a>
 <?php if ($isLeader): ?>
       <a href="#team" data-page="team">팀원 관리</a>
+      <a href="#training-attendance" data-page="training-attendance">코치 교육 출석</a>
 <?php endif; ?>
       <a href="#my-info" data-page="my-info">내 정보</a>
     </nav>
@@ -101,6 +102,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 <script src="/coach/js/pages/my-info.js"></script>
 <?php if ($isLeader): ?>
 <script src="/coach/js/pages/team-management.js"></script>
+<script src="/coach/js/pages/training-attendance.js"></script>
 <?php endif; ?>
 <script>CoachApp.init();</script>
 <?php endif; ?>

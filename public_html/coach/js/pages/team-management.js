@@ -26,38 +26,24 @@ CoachApp.registerPage('team', {
         `<div class="empty-state">${UI.esc(res.message || '오류')}</div>`;
       return;
     }
-    const { recent_dates, members } = res.data;
+    const { members } = res.data;
     if (!members.length) {
       document.getElementById('teamListContent').innerHTML =
         `<div class="empty-state">아직 팀원이 없습니다</div>`;
       return;
     }
 
-    const dateHeaders = recent_dates.map(d => {
-      // 04-30 형태로 짧게 (월-일)
-      const short = d.slice(5);
-      return `<th style="white-space:nowrap;text-align:center">${UI.esc(short)}</th>`;
-    }).join('');
-
     const rows = members.map(m => {
-      const star = m.is_self ? ' <span style="color:var(--accent,#FF5E00)">★</span>' : '';
+      const pct = Math.round((m.attendance_rate || 0) * 100);
+      const bar = this.attendanceBar(m.attended_count, m.total_count);
       const noteCol = m.meeting_notes_count > 0 ? m.meeting_notes_count : '-';
-      const checkCells = (m.attendance || []).map(a => `
-        <td style="text-align:center;cursor:default"
-            onclick="event.stopPropagation()">
-          <input type="checkbox"
-                 data-bulk-toggle
-                 data-coach-id="${m.coach_id}"
-                 data-date="${UI.esc(a.date)}"
-                 ${a.attended ? 'checked' : ''}>
-        </td>
-      `).join('');
+      const star = m.is_self ? ' <span style="color:var(--accent,#FF5E00)">★</span>' : '';
       return `
         <tr style="cursor:pointer" onclick="location.hash='#team/${m.coach_id}'">
           <td>${UI.esc(m.coach_name)}${star}</td>
           <td>${UI.esc(m.korean_name || '-')}</td>
-          ${checkCells}
-          <td style="text-align:center">${noteCol}</td>
+          <td>${bar} ${m.attended_count}/${m.total_count} ${pct}%</td>
+          <td>${noteCol}</td>
         </tr>
       `;
     }).join('');
@@ -70,8 +56,8 @@ CoachApp.registerPage('team', {
               <tr>
                 <th>이름</th>
                 <th>한글이름</th>
-                ${dateHeaders}
-                <th style="text-align:center">면담</th>
+                <th style="min-width:160px">직전 4주 출석</th>
+                <th>면담</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -79,32 +65,25 @@ CoachApp.registerPage('team', {
         </div>
       </div>
       <div style="margin-top:8px;color:var(--text-secondary);font-size:12px">
-        ★ = 본인(팀장) · 행 클릭 → 상세 · 체크박스 = 코치 교육 출석 (직전 4회)
+        ★ = 본인(팀장) · 행 클릭 → 상세
       </div>
     `;
-    document.querySelectorAll('[data-bulk-toggle]').forEach(cb => {
-      cb.addEventListener('change', e => this.handleBulkToggle(e));
-    });
   },
 
-  async handleBulkToggle(ev) {
-    const cb = ev.target;
-    ev.stopPropagation();
-    const coachId = parseInt(cb.dataset.coachId, 10);
-    const date    = cb.dataset.date;
-    const want    = cb.checked;
-    cb.disabled = true;
-
-    const res = await API.post('/api/coach_training_attendance.php?action=toggle', {
-      coach_id: coachId,
-      training_date: date,
-      attended: want ? 1 : 0,
-    });
-    cb.disabled = false;
-    if (!res.ok) {
-      alert(res.message || '실패');
-      cb.checked = !want; // rollback
+  attendanceBar(attended, total) {
+    const ratio = total > 0 ? attended / total : 0;
+    let color;
+    if (ratio >= 1) color = '#1ed760';
+    else if (ratio >= 0.75) color = '#a3e635';
+    else if (ratio >= 0.5) color = '#ffa42b';
+    else if (ratio > 0) color = '#f3727f';
+    else color = '#4d4d4d';
+    const cells = [];
+    for (let i = 0; i < total; i++) {
+      const filled = i < attended;
+      cells.push(`<span style="display:inline-block;width:12px;height:8px;margin-right:2px;background:${filled ? color : '#3a3a3a'};border-radius:2px"></span>`);
     }
+    return `<span style="display:inline-block;vertical-align:middle">${cells.join('')}</span>`;
   },
 
   async renderDetail(coachId) {
