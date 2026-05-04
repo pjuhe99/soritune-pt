@@ -83,7 +83,7 @@ App.registerPage('coaches', {
                 <td>${yn(c.soriblock_advanced)}</td>
                 <td>
                   <button class="btn btn-small btn-secondary" onclick="App.pages.coaches.showForm(${c.id})">편집</button>
-                  <button class="btn btn-small" onclick="App.pages.coaches.openMeetingNotesModal(${c.id}, '${UI.esc(c.coach_name).replace(/'/g, "\\'")}')">면담</button>
+                  <button class="btn btn-small btn-secondary" onclick="App.pages.coaches.openMeetingNotesModal(${c.id}, '${UI.esc(c.coach_name).replace(/'/g, "\\'")}')">면담</button>
                 </td>
               </tr>
             `;

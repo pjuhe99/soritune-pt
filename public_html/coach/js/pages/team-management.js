@@ -183,8 +183,8 @@ CoachApp.registerPage('team', {
 
   renderNoteCard(n) {
     const editBtns = n.can_edit
-      ? `<button class="btn btn-small" data-act="edit" data-id="${n.id}">수정</button>
-         <button class="btn btn-small btn-outline" data-act="del" data-id="${n.id}">삭제</button>`
+      ? `<button class="btn btn-secondary btn-small" data-act="edit" data-id="${n.id}">수정</button>
+         <button class="btn btn-outline btn-small" data-act="del" data-id="${n.id}">삭제</button>`
       : '';
     const author = n.can_edit
       ? ''
