@@ -2,6 +2,12 @@
 require_once __DIR__ . '/../includes/auth.php';
 $user = getCurrentUser();
 $isLoggedIn = $user && $user['role'] === 'coach';
+$isLeader = false;
+if ($isLoggedIn) {
+    require_once __DIR__ . '/../includes/db.php';
+    require_once __DIR__ . '/../includes/coach_team_guard.php';
+    $isLeader = coachIsLeader(getDB(), (int)$user['id']);
+}
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -70,6 +76,9 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
     <nav class="sidebar-nav">
       <a href="#my-members" data-page="my-members">내 회원</a>
       <a href="#kakao-check" data-page="kakao-check">카톡방 입장 체크</a>
+<?php if ($isLeader): ?>
+      <a href="#team" data-page="team">팀원 관리</a>
+<?php endif; ?>
       <a href="#my-info" data-page="my-info">내 정보</a>
     </nav>
   </aside>
@@ -90,6 +99,9 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 <script src="/coach/js/pages/kakao-check.js"></script>
 <script src="/coach/js/pages/member-chart.js"></script>
 <script src="/coach/js/pages/my-info.js"></script>
+<?php if ($isLeader): ?>
+<script src="/coach/js/pages/team-management.js"></script>
+<?php endif; ?>
 <script>CoachApp.init();</script>
 <?php endif; ?>
 
