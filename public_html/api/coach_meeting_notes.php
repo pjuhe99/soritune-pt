@@ -84,7 +84,7 @@ function createMeetingNote(
 
 /**
  * 면담 UPDATE — 작성자 본인만 가능 (WHERE created_by=?로 race-free).
- * @return bool affected_rows > 0
+ * @return bool 권한이 있으면 true (no-op update도 true), 없으면 false
  * @throws InvalidArgumentException
  */
 function updateMeetingNote(
@@ -99,15 +99,22 @@ function updateMeetingNote(
          WHERE id = ? AND created_by = ?
     ");
     $stmt->execute([$meetingDate, $notes, $id, $createdBy]);
-    $affected = $stmt->rowCount() > 0;
 
-    if ($affected) {
+    if ($stmt->rowCount() > 0) {
         logChange($db, 'meeting_note', $id, 'update',
             null,
             ['meeting_date' => $meetingDate],
             'coach', $createdBy);
+        return true;
     }
-    return $affected;
+
+    // 0 rows: (a) 동일 본문으로 no-op 또는 (b) 권한 없음. 재확인.
+    $check = $db->prepare(
+        "SELECT 1 FROM coach_meeting_notes WHERE id = ? AND created_by = ? LIMIT 1"
+    );
+    $check->execute([$id, $createdBy]);
+    return (bool)$check->fetchColumn();
+    // no-op이면 logChange 안 함 (실제 변경 없음)
 }
 
 /**

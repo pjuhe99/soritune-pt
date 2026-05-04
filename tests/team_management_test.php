@@ -144,6 +144,18 @@ t_assert_eq(false,
     'Nana가 Kel 메모 수정 → false'
 );
 
+t_section('updateMeetingNote — no-op (동일 본문) 처리');
+$noopId = createMeetingNote($db, $luluId, $kelId, '2026-05-01', '동일 본문');
+t_assert_true(
+    updateMeetingNote($db, $noopId, $kelId, '2026-05-01', '동일 본문'),
+    '같은 본문 재저장도 true (권한 OK이면 no-op도 성공)'
+);
+t_assert_eq(false,
+    updateMeetingNote($db, $noopId, $nanaId, '2026-05-01', '동일 본문'),
+    '권한 없는 작성자는 여전히 false'
+);
+deleteMeetingNote($db, $noopId, $kelId);
+
 t_section('deleteMeetingNote — 작성자 본인만');
 t_assert_eq(false,
     deleteMeetingNote($db, $noteId, $nanaId),
