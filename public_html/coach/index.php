@@ -71,6 +71,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 
 <?php else: ?>
 <div class="app-layout">
+  <div class="sidebar-backdrop" onclick="toggleSidebar(false)"></div>
   <aside class="sidebar">
     <div class="sidebar-logo">SoriTune PT</div>
     <nav class="sidebar-nav">
@@ -85,7 +86,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
   </aside>
   <main class="main-content">
     <div class="topbar">
-      <div></div>
+      <button class="mobile-menu-btn" onclick="toggleSidebar()" aria-label="메뉴 열기">☰</button>
       <div class="topbar-user">
         <span><?= htmlspecialchars($user['name']) ?> (코치)</span>
         <button class="btn btn-small btn-outline" onclick="logout()">LOGOUT</button>

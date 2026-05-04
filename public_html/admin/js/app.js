@@ -19,6 +19,7 @@ const App = {
       a.classList.toggle('active', a.dataset.page === page);
     });
 
+    toggleSidebar(false); // 모바일에서 메뉴 클릭 후 자동 닫힘
     this.currentPage = page;
     const handler = this.pages[page];
     if (handler) {
@@ -122,4 +123,16 @@ const UI = {
 async function logout() {
   await API.post('/api/auth.php?action=logout');
   location.reload();
+}
+
+/**
+ * 모바일 사이드바 토글. force=true이면 강제 열기, false 강제 닫기, 생략 시 토글.
+ */
+function toggleSidebar(force) {
+  const sb = document.querySelector('.sidebar');
+  const bd = document.querySelector('.sidebar-backdrop');
+  if (!sb || !bd) return;
+  const wantOpen = force === undefined ? !sb.classList.contains('open') : !!force;
+  sb.classList.toggle('open', wantOpen);
+  bd.classList.toggle('open', wantOpen);
 }
