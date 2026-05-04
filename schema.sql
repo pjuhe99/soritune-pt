@@ -18,6 +18,8 @@ DROP TABLE IF EXISTS `members`;
 DROP TABLE IF EXISTS `coach_assignment_drafts`;
 DROP TABLE IF EXISTS `coach_assignment_runs`;
 DROP TABLE IF EXISTS `coach_retention_runs`;
+DROP TABLE IF EXISTS `coach_training_attendance`;
+DROP TABLE IF EXISTS `coach_meeting_notes`;
 DROP TABLE IF EXISTS `coach_retention_scores`;
 DROP TABLE IF EXISTS `coaches`;
 DROP TABLE IF EXISTS `admins`;
@@ -57,6 +59,34 @@ CREATE TABLE `coaches` (
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX `idx_team_leader` (`team_leader_id`),
   CONSTRAINT `fk_coach_team_leader` FOREIGN KEY (`team_leader_id`) REFERENCES `coaches`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 2a. coach_meeting_notes
+CREATE TABLE `coach_meeting_notes` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `coach_id` INT NOT NULL COMMENT '면담 대상 (팀원) coaches.id',
+  `meeting_date` DATE NOT NULL COMMENT '팀장이 선택한 면담 일자',
+  `notes` TEXT NOT NULL,
+  `created_by` INT NOT NULL COMMENT '작성한 팀장 coaches.id',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_coach_date` (`coach_id`, `meeting_date`, `id`),
+  INDEX `idx_created_by` (`created_by`),
+  CONSTRAINT `fk_cmn_coach`   FOREIGN KEY (`coach_id`)   REFERENCES `coaches`(`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_cmn_creator` FOREIGN KEY (`created_by`) REFERENCES `coaches`(`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 2b. coach_training_attendance
+CREATE TABLE `coach_training_attendance` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `coach_id` INT NOT NULL,
+  `training_date` DATE NOT NULL COMMENT '가상 회차 일자 (보통 목요일)',
+  `marked_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `marked_by` INT NOT NULL COMMENT '체크한 팀장 coaches.id',
+  UNIQUE KEY `uk_coach_date` (`coach_id`, `training_date`),
+  INDEX `idx_training_date` (`training_date`),
+  CONSTRAINT `fk_cta_coach`  FOREIGN KEY (`coach_id`)  REFERENCES `coaches`(`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_cta_marker` FOREIGN KEY (`marked_by`) REFERENCES `coaches`(`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3. members (NO status, NO current_coach_id — derived at query time)
@@ -193,7 +223,7 @@ CREATE TABLE `merge_logs` (
 -- 11. change_logs
 CREATE TABLE `change_logs` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `target_type` ENUM('member','order','coach_assignment','merge','retention_allocation') NOT NULL,
+  `target_type` ENUM('member','order','coach_assignment','merge','retention_allocation','meeting_note','training_attendance') NOT NULL,
   `target_id` INT NOT NULL,
   `action` VARCHAR(50) NOT NULL,
   `old_value` JSON,

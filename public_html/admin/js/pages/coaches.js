@@ -83,6 +83,7 @@ App.registerPage('coaches', {
                 <td>${yn(c.soriblock_advanced)}</td>
                 <td>
                   <button class="btn btn-small btn-secondary" onclick="App.pages.coaches.showForm(${c.id})">편집</button>
+                  <button class="btn btn-small btn-secondary" onclick="App.pages.coaches.openMeetingNotesModal(${c.id}, '${UI.esc(c.coach_name).replace(/'/g, "\\'")}')">면담</button>
                 </td>
               </tr>
             `;
@@ -296,5 +297,36 @@ App.registerPage('coaches', {
     } else {
       alert(res.message);
     }
+  },
+
+  async openMeetingNotesModal(coachId, coachName) {
+    const overlay = UI.showModal(`
+      <h2 style="font-size:18px;margin-bottom:12px">${UI.esc(coachName)} — 면담 기록</h2>
+      <div id="amnBody"><div class="loading">불러오는 중...</div></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-outline" onclick="UI.closeModal()">닫기</button>
+      </div>
+    `);
+
+    const res = await API.get(`/api/coach_meeting_notes.php?action=list&coach_id=${coachId}`);
+    const body = document.getElementById('amnBody');
+    if (!res.ok) {
+      body.innerHTML = `<div class="empty-state">${UI.esc(res.message || '오류')}</div>`;
+      return;
+    }
+    const notes = res.data.notes;
+    if (!notes.length) {
+      body.innerHTML = `<div class="empty-state">면담 기록 없음</div>`;
+      return;
+    }
+    body.innerHTML = notes.map(n => `
+      <div class="card" style="padding:14px;margin-bottom:10px">
+        <div style="margin-bottom:8px">
+          <strong>${UI.esc(n.meeting_date)}</strong>
+          <span style="color:var(--text-secondary);margin-left:8px">by ${UI.esc(n.created_by_name)}</span>
+        </div>
+        <div style="white-space:pre-wrap;font-size:14px">${UI.esc(n.notes)}</div>
+      </div>
+    `).join('');
   },
 });

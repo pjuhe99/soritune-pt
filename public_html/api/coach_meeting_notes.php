@@ -1,0 +1,220 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/coach_team_guard.php';
+
+/**
+ * 면담 본문 검증.
+ * @throws InvalidArgumentException
+ */
+function validateMeetingNoteBody(string $notes): string
+{
+    $trimmed = trim($notes);
+    if ($trimmed === '') {
+        throw new InvalidArgumentException('notes는 빈 문자열일 수 없습니다');
+    }
+    if (mb_strlen($trimmed) > 50000) {
+        throw new InvalidArgumentException('notes는 50,000자를 초과할 수 없습니다');
+    }
+    return $trimmed;
+}
+
+/**
+ * meeting_date 검증. YYYY-MM-DD + checkdate.
+ * @throws InvalidArgumentException
+ */
+function validateMeetingDate(string $date): string
+{
+    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $m)) {
+        throw new InvalidArgumentException('meeting_date 형식 오류 (YYYY-MM-DD)');
+    }
+    if (!checkdate((int)$m[2], (int)$m[3], (int)$m[1])) {
+        throw new InvalidArgumentException('meeting_date 유효하지 않은 일자');
+    }
+    return $date;
+}
+
+/**
+ * 한 코치 대상의 면담 list. meeting_date DESC, id DESC.
+ * 권한 검증은 caller 책임.
+ */
+function listMeetingNotes(PDO $db, int $coachId): array
+{
+    $stmt = $db->prepare("
+        SELECT n.id, n.meeting_date, n.notes,
+               n.created_by, c.coach_name AS created_by_name,
+               n.created_at, n.updated_at
+          FROM coach_meeting_notes n
+          JOIN coaches c ON c.id = n.created_by
+         WHERE n.coach_id = ?
+         ORDER BY n.meeting_date DESC, n.id DESC
+    ");
+    $stmt->execute([$coachId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * 면담 INSERT. 권한 검증은 caller 책임.
+ * @return int 신규 row id
+ * @throws InvalidArgumentException
+ */
+function createMeetingNote(
+    PDO $db, int $coachId, int $createdBy, string $meetingDate, string $notes
+): int {
+    $meetingDate = validateMeetingDate($meetingDate);
+    $notes       = validateMeetingNoteBody($notes);
+
+    $stmt = $db->prepare("
+        INSERT INTO coach_meeting_notes (coach_id, meeting_date, notes, created_by)
+        VALUES (?, ?, ?, ?)
+    ");
+    $stmt->execute([$coachId, $meetingDate, $notes, $createdBy]);
+    $id = (int)$db->lastInsertId();
+
+    logChange($db, 'meeting_note', $id, 'create',
+        null,
+        ['coach_id' => $coachId, 'meeting_date' => $meetingDate],
+        'coach', $createdBy);
+
+    return $id;
+}
+
+/**
+ * 면담 UPDATE — 작성자 본인만 가능 (WHERE created_by=?로 race-free).
+ * @return bool 권한이 있으면 true (no-op update도 true), 없으면 false
+ * @throws InvalidArgumentException
+ */
+function updateMeetingNote(
+    PDO $db, int $id, int $createdBy, string $meetingDate, string $notes
+): bool {
+    $meetingDate = validateMeetingDate($meetingDate);
+    $notes       = validateMeetingNoteBody($notes);
+
+    $stmt = $db->prepare("
+        UPDATE coach_meeting_notes
+           SET meeting_date = ?, notes = ?
+         WHERE id = ? AND created_by = ?
+    ");
+    $stmt->execute([$meetingDate, $notes, $id, $createdBy]);
+
+    if ($stmt->rowCount() > 0) {
+        logChange($db, 'meeting_note', $id, 'update',
+            null,
+            ['meeting_date' => $meetingDate],
+            'coach', $createdBy);
+        return true;
+    }
+
+    // 0 rows: (a) 동일 본문으로 no-op 또는 (b) 권한 없음. 재확인.
+    $check = $db->prepare(
+        "SELECT 1 FROM coach_meeting_notes WHERE id = ? AND created_by = ? LIMIT 1"
+    );
+    $check->execute([$id, $createdBy]);
+    return (bool)$check->fetchColumn();
+    // no-op이면 logChange 안 함 (실제 변경 없음)
+}
+
+/**
+ * 면담 DELETE — 작성자 본인만 가능.
+ * @return bool affected_rows > 0
+ */
+function deleteMeetingNote(PDO $db, int $id, int $createdBy): bool
+{
+    $stmt = $db->prepare("
+        DELETE FROM coach_meeting_notes
+         WHERE id = ? AND created_by = ?
+    ");
+    $stmt->execute([$id, $createdBy]);
+    $affected = $stmt->rowCount() > 0;
+
+    if ($affected) {
+        logChange($db, 'meeting_note', $id, 'delete', null, null, 'coach', $createdBy);
+    }
+    return $affected;
+}
+
+// 라우터는 Task 5에서 추가
+if (PHP_SAPI === 'cli' || defined('COACH_MEETING_NOTES_LIB_ONLY')) return;
+
+header('Content-Type: application/json; charset=utf-8');
+$user = requireAnyAuth();
+$db   = getDB();
+$action = $_GET['action'] ?? '';
+
+switch ($action) {
+    case 'list': {
+        $coachId = (int)($_GET['coach_id'] ?? 0);
+        if (!$coachId) jsonError('coach_id가 필요합니다');
+
+        $isAdmin = $user['role'] === 'admin';
+        if (!$isAdmin) {
+            // 코치: 자기 팀 멤버만
+            assertIsLeader($db, (int)$user['id']);
+            assertCoachIsMyMember($db, (int)$user['id'], $coachId);
+        }
+
+        $notes = listMeetingNotes($db, $coachId);
+        $viewerId = (int)$user['id'];
+        foreach ($notes as &$n) {
+            $n['can_edit'] = !$isAdmin && (int)$n['created_by'] === $viewerId;
+        }
+        unset($n);
+
+        jsonSuccess(['notes' => $notes]);
+    }
+
+    case 'create': {
+        if ($user['role'] !== 'coach') jsonError('코치만 가능합니다', 403);
+        $input = getJsonInput();
+        $coachId     = (int)($input['coach_id'] ?? 0);
+        $meetingDate = (string)($input['meeting_date'] ?? '');
+        $notes       = (string)($input['notes'] ?? '');
+        if (!$coachId) jsonError('coach_id가 필요합니다');
+
+        assertIsLeader($db, (int)$user['id']);
+        assertCoachIsMyMember($db, (int)$user['id'], $coachId);
+
+        try {
+            $id = createMeetingNote($db, $coachId, (int)$user['id'], $meetingDate, $notes);
+        } catch (InvalidArgumentException $e) {
+            jsonError($e->getMessage());
+        }
+        jsonSuccess(['id' => $id]);
+    }
+
+    case 'update': {
+        if ($user['role'] !== 'coach') jsonError('코치만 가능합니다', 403);
+        $id = (int)($_GET['id'] ?? 0);
+        if (!$id) jsonError('id가 필요합니다');
+
+        $input = getJsonInput();
+        $meetingDate = (string)($input['meeting_date'] ?? '');
+        $notes       = (string)($input['notes'] ?? '');
+
+        try {
+            $ok = updateMeetingNote($db, $id, (int)$user['id'], $meetingDate, $notes);
+        } catch (InvalidArgumentException $e) {
+            jsonError($e->getMessage());
+        }
+        if (!$ok) jsonError('수정할 권한이 없거나 메모를 찾을 수 없습니다', 403);
+
+        jsonSuccess(['updated' => true]);
+    }
+
+    case 'delete': {
+        if ($user['role'] !== 'coach') jsonError('코치만 가능합니다', 403);
+        $id = (int)($_GET['id'] ?? 0);
+        if (!$id) jsonError('id가 필요합니다');
+
+        $ok = deleteMeetingNote($db, $id, (int)$user['id']);
+        if (!$ok) jsonError('삭제할 권한이 없거나 메모를 찾을 수 없습니다', 403);
+
+        jsonSuccess(['deleted' => true]);
+    }
+
+    default:
+        jsonError('알 수 없는 액션입니다', 404);
+}

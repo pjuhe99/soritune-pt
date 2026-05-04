@@ -198,6 +198,7 @@ What distinguishes Spotify is its pill-and-circle geometry. Primary buttons use 
 - Don't add additional brand colors — orange + achromatic grays is the complete palette
 - Don't use relaxed line-heights — Spotify's typography is compact and dense
 - Don't expose raw gray borders — use shadow-based or inset borders instead
+- **Don't use bare `class="btn"` without a variant** — the base `.btn` has no `background-color` (style.css L268 onwards). Without `btn-primary` / `btn-secondary` / `btn-outline` / `btn-danger`, the button is transparent and disappears against dark surfaces. **Always pair `.btn` with one variant.** For tab/toggle buttons: active = `btn-primary` (orange), inactive = `btn-outline` (transparent + border). Toggling only between `[no-variant]` and `btn-outline` will render the active state invisible.
 
 ## 8. Responsive Behavior
 
