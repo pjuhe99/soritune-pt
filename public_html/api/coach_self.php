@@ -30,20 +30,19 @@ function buildTeamOverview(PDO $db, int $leaderId, DateTimeImmutable $nowKst): a
 
     $memberIds = array_map(fn($m) => (int)$m['coach_id'], $members);
 
-    // 직전 4주 출석 카운트 (member별)
+    // 직전 4주 출석 row 직접 (member별 + date별)
     $idsPh   = implode(',', array_fill(0, count($memberIds), '?'));
     $datesPh = implode(',', array_fill(0, count($recentDates), '?'));
     $att = $db->prepare("
-        SELECT coach_id, COUNT(*) AS cnt
+        SELECT coach_id, training_date
           FROM coach_training_attendance
          WHERE coach_id IN ({$idsPh})
            AND training_date IN ({$datesPh})
-         GROUP BY coach_id
     ");
     $att->execute(array_merge($memberIds, $recentDates));
-    $attMap = [];
+    $attBy = []; // [coachId][date] = 1
     foreach ($att->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $attMap[(int)$r['coach_id']] = (int)$r['cnt'];
+        $attBy[(int)$r['coach_id']][$r['training_date']] = 1;
     }
 
     // 면담 카운트 (member별, 전체)
@@ -62,8 +61,16 @@ function buildTeamOverview(PDO $db, int $leaderId, DateTimeImmutable $nowKst): a
     $total = COACH_TRAINING_RECENT_COUNT;
     foreach ($members as &$m) {
         $cid = (int)$m['coach_id'];
-        $attended = $attMap[$cid] ?? 0;
+        $rows = $attBy[$cid] ?? [];
+        $attended = 0;
+        $attendance = [];
+        foreach ($recentDates as $d) {
+            $on = isset($rows[$d]) ? 1 : 0;
+            $attendance[] = ['date' => $d, 'attended' => $on];
+            $attended += $on;
+        }
         $m['is_self']             = $cid === $leaderId;
+        $m['attendance']          = $attendance;     // ← NEW
         $m['attended_count']      = $attended;
         $m['total_count']         = $total;
         $m['attendance_rate']     = $total > 0 ? round($attended / $total, 4) : 0.0;

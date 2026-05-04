@@ -2041,4 +2041,20 @@ PROD 단계는 별도 (이 plan 외)로 진행:
 - "directory of changes" check: 모든 파일 절대경로 명시.
 - 메서드 이름 일관성: `coachIsLeader` / `coachIsMyMember` (boolean returner) + `assertIsLeader` / `assertCoachIsMyMember` (가드). spec §4.5는 assert만 명시했으나 테스트 가능성 위해 boolean returner도 export. 두 명칭 일관.
 - `buildTeamOverview`는 spec에 직접 등장하지 않으나 §4.2 team_overview 액션 응답을 만들기 위한 내부 함수. 함수형 테스트 가능성 위해 export.
+
+---
+
+## Task 17: 명단 일괄 출석 체크 (일자별 컬럼 + inline toggle)
+
+> **완료일**: 2026-05-04
+
+**변경 요지**: 팀장이 팀원 명단에서 직접 모든 팀원의 직전 4 일자 출석을 토글할 수 있도록 `#team` 명단 표를 재설계. 기존 "직전 4주 출석" 단일 컬럼(시각 막대 + `n/4 NN%`)을 제거하고, 일자별 4개 체크박스 컬럼으로 분해. 상세 페이지의 출석 탭은 그대로 유지.
+
+**영향받은 파일**:
+- `public_html/api/coach_self.php` — `buildTeamOverview`: 출석 집계 쿼리를 row별(coachId×date)로 변경 + 각 멤버에 `attendance: [{date, attended}, ...4 entries DESC]` 배열 추가. `attMap`(COUNT) → `attBy`([coachId][date]=1) 로 교체.
+- `public_html/coach/js/pages/team-management.js` — `renderList()` 전면 교체: `recent_dates` 헤더 4컬럼, 체크박스 셀, `handleBulkToggle()` 신규 메서드. `attendanceBar()` 제거(dead code).
+- `tests/team_management_test.php` — `team_overview — members[].attendance 배열` 섹션 5 assertion 추가.
+- `docs/superpowers/specs/2026-05-04-team-management-design.md` — §4.2 응답 예시에 `attendance` 배열 추가, §5.2 화면 1 표 구조 갱신(일자별 체크박스 + 클릭 분리 정책).
+
+**회귀 테스트**: 219 PASS / 0 FAIL (기존 214 + 신규 5).
 - Task 14 Step 14.1은 "기존 코드 확인" 단계로 다음 step의 정확한 삽입 위치를 결정. plan에 명시적 라인 번호를 못 박은 이유: `coaches.js`가 919 lines (2026-04-30 PROD)에서 변동 가능. 실행 시 `grep -n` 으로 위치를 확인하는 절차로 plan에 명시.

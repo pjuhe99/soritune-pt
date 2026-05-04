@@ -297,3 +297,23 @@ t_assert_throws(
     RuntimeException::class,
     'Lulu는 팀장 아님 → RuntimeException'
 );
+
+t_section('team_overview — members[].attendance 배열');
+// 위 시드(Lulu 04-30 출석)에서
+$db = getDB();
+$kelId  = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Kel'")->fetchColumn();
+$luluId = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Lulu'")->fetchColumn();
+$db->prepare("DELETE FROM coach_training_attendance WHERE coach_id IN (?, ?)")
+   ->execute([$kelId, $luluId]);
+$now = new DateTimeImmutable('2026-05-01 09:00:00', new DateTimeZone('Asia/Seoul'));
+toggleAttendance($db, $luluId, '2026-04-30', true, $kelId);
+
+$ov = buildTeamOverview($db, $kelId, $now);
+$lulu = array_values(array_filter($ov['members'], fn($m) => (int)$m['coach_id'] === $luluId))[0];
+t_assert_true(isset($lulu['attendance']), 'attendance 키 존재');
+t_assert_eq(4, count($lulu['attendance']), 'attendance 4개');
+t_assert_eq('2026-04-30', $lulu['attendance'][0]['date'], 'attendance[0] 최신');
+t_assert_eq(1, $lulu['attendance'][0]['attended'], 'attendance[0] 출석');
+t_assert_eq(0, $lulu['attendance'][1]['attended'], 'attendance[1] 결석');
+$db->prepare("DELETE FROM coach_training_attendance WHERE coach_id IN (?, ?)")
+   ->execute([$kelId, $luluId]);
