@@ -184,9 +184,84 @@ CoachApp.registerPage('team', {
     `;
   },
 
-  // Task 12에서 채움
-  openNoteModal(note) { alert('TODO Task 12'); },
-  handleNoteAction(ev) { ev.stopPropagation(); /* TODO Task 12 */ },
+  openNoteModal(note) {
+    const today = new Date();
+    const kst = new Date(today.getTime() + 9*60*60*1000);
+    const todayStr = kst.toISOString().slice(0,10);
+
+    const date  = note ? note.meeting_date : todayStr;
+    const body  = note ? note.notes : '';
+    const isEdit = !!note;
+
+    const overlay = UI.showModal(`
+      <h2 style="font-size:18px;margin-bottom:12px">${isEdit ? '면담 기록 수정' : '새 면담 기록'}</h2>
+      <div class="form-group">
+        <label class="form-label">면담 일자</label>
+        <input type="date" class="form-input" id="nmDate" value="${UI.esc(date)}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">메모</label>
+        <textarea class="form-input" id="nmNotes" rows="8"
+                  placeholder="면담 내용을 자유롭게 입력하세요">${UI.esc(body)}</textarea>
+      </div>
+      <div id="nmErr" class="login-error" style="display:none"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-outline" id="nmCancel">취소</button>
+        <button class="btn btn-primary" id="nmSave">${isEdit ? '저장' : '작성'}</button>
+      </div>
+    `);
+    document.getElementById('nmCancel').onclick = () => UI.closeModal();
+    document.getElementById('nmSave').onclick = async () => {
+      const dateVal = document.getElementById('nmDate').value;
+      const notesVal = document.getElementById('nmNotes').value;
+      const err = document.getElementById('nmErr');
+      err.style.display = 'none';
+
+      if (!dateVal) { err.textContent='일자를 선택하세요'; err.style.display='block'; return; }
+      if (!notesVal.trim()) { err.textContent='메모를 입력하세요'; err.style.display='block'; return; }
+
+      let res;
+      if (isEdit) {
+        res = await API.post(
+          `/api/coach_meeting_notes.php?action=update&id=${note.id}`,
+          { meeting_date: dateVal, notes: notesVal }
+        );
+      } else {
+        res = await API.post(
+          `/api/coach_meeting_notes.php?action=create`,
+          { coach_id: this._currentCoachId, meeting_date: dateVal, notes: notesVal }
+        );
+      }
+      if (!res.ok) {
+        err.textContent = res.message || '저장 실패';
+        err.style.display = 'block';
+        return;
+      }
+      UI.closeModal();
+      await this.renderNotesTab();
+    };
+  },
+
+  async handleNoteAction(ev) {
+    ev.stopPropagation();
+    const btn = ev.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = parseInt(btn.dataset.id, 10);
+    const act = btn.dataset.act;
+
+    if (act === 'edit') {
+      // 카드에서 현재 값 추출
+      const card = btn.closest('[data-note-id]');
+      const meetingDate = card.dataset.meetingDate;
+      const notesText = card.querySelector('div[style*="pre-wrap"]').textContent;
+      this.openNoteModal({ id, meeting_date: meetingDate, notes: notesText });
+    } else if (act === 'del') {
+      if (!UI.confirm('이 면담 기록을 삭제할까요?')) return;
+      const res = await API.post(`/api/coach_meeting_notes.php?action=delete&id=${id}`);
+      if (!res.ok) { alert(res.message || '삭제 실패'); return; }
+      await this.renderNotesTab();
+    }
+  },
 
   // Task 13에서 채움
   async renderAttendanceTab() {
