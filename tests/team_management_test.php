@@ -180,3 +180,79 @@ $payload = json_decode($logRow['new_value'], true);
 t_assert_true(!isset($payload['notes']), 'logChange new_value에 본문(notes) 미저장');
 t_assert_eq($luluId, $payload['coach_id'], 'logChange new_value에 coach_id 메타');
 deleteMeetingNote($db, $noteId3, $kelId);
+
+const COACH_TRAINING_ATTENDANCE_LIB_ONLY = true;
+require_once __DIR__ . '/../public_html/api/coach_training_attendance.php';
+
+t_section('toggleAttendance — INSERT/DELETE 멱등');
+$db = getDB();
+$kelId  = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Kel'")->fetchColumn();
+$luluId = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Lulu'")->fetchColumn();
+$thuStr = '2026-04-30'; // Thursday
+
+// 시작 상태: 깨끗하게
+$db->prepare("DELETE FROM coach_training_attendance WHERE coach_id=? AND training_date=?")
+   ->execute([$luluId, $thuStr]);
+
+t_assert_true(toggleAttendance($db, $luluId, $thuStr, true, $kelId), '체크 ON → 변경');
+t_assert_eq(false, toggleAttendance($db, $luluId, $thuStr, true, $kelId), '두번째 체크 ON → no-op');
+
+$cnt = (int)$db->query(
+    "SELECT COUNT(*) FROM coach_training_attendance WHERE coach_id={$luluId} AND training_date='{$thuStr}'"
+)->fetchColumn();
+t_assert_eq(1, $cnt, 'row 1개 존재 (UNIQUE)');
+
+t_assert_true(toggleAttendance($db, $luluId, $thuStr, false, $kelId), '체크 OFF → 변경');
+t_assert_eq(false, toggleAttendance($db, $luluId, $thuStr, false, $kelId), '두번째 OFF → no-op');
+
+$cnt = (int)$db->query(
+    "SELECT COUNT(*) FROM coach_training_attendance WHERE coach_id={$luluId} AND training_date='{$thuStr}'"
+)->fetchColumn();
+t_assert_eq(0, $cnt, 'row 삭제됨');
+
+t_section('toggleAttendance — 검증');
+t_assert_throws(
+    fn() => toggleAttendance($db, $luluId, '2026-04-29', true, $kelId), // Wednesday
+    InvalidArgumentException::class,
+    '수요일 일자 거부'
+);
+t_assert_throws(
+    fn() => toggleAttendance($db, $luluId, '2026-13-01', true, $kelId),
+    InvalidArgumentException::class,
+    '잘못된 형식 거부'
+);
+
+t_section('listAttendanceHistory — 형식 + 출석율');
+$now = new DateTimeImmutable('2026-05-01 09:00:00', new DateTimeZone('Asia/Seoul'));
+// 시드: 직전 4회 = 04-30, 04-23, 04-16, 04-09 중 첫 두 개만 출석
+$db->prepare("DELETE FROM coach_training_attendance WHERE coach_id=?")->execute([$luluId]);
+toggleAttendance($db, $luluId, '2026-04-30', true, $kelId);
+toggleAttendance($db, $luluId, '2026-04-23', true, $kelId);
+
+$h = listAttendanceHistory($db, $luluId, $now);
+t_assert_eq(4, count($h['recent']),  'recent 4개');
+t_assert_eq(8, count($h['earlier']), 'earlier 8개');
+t_assert_eq(2, $h['attended_count'], '출석 2회');
+t_assert_eq(4, $h['total_count'],    '분모 4');
+t_assert_eq(0.5, $h['attendance_rate'], '출석율 50%');
+t_assert_eq('2026-04-30', $h['recent'][0]['date'], 'recent[0] 최신');
+t_assert_eq(1, (int)$h['recent'][0]['attended'], 'recent[0] 출석');
+t_assert_eq(0, (int)$h['recent'][2]['attended'], 'recent[2] 결석');
+t_assert_eq('Kel', $h['recent'][0]['marked_by_name'], 'marked_by_name JOIN');
+
+// 정리
+$db->prepare("DELETE FROM coach_training_attendance WHERE coach_id=?")->execute([$luluId]);
+
+t_section('toggleAttendance — logChange (메타만)');
+toggleAttendance($db, $luluId, '2026-04-30', true, $kelId);
+$logCnt = (int)$db->query(
+    "SELECT COUNT(*) FROM change_logs
+      WHERE target_type='training_attendance' AND action='mark_attended'"
+)->fetchColumn();
+t_assert_true($logCnt >= 1, 'mark_attended 로그 생성');
+toggleAttendance($db, $luluId, '2026-04-30', false, $kelId);
+$logCnt2 = (int)$db->query(
+    "SELECT COUNT(*) FROM change_logs
+      WHERE target_type='training_attendance' AND action='mark_absent'"
+)->fetchColumn();
+t_assert_true($logCnt2 >= 1, 'mark_absent 로그 생성');
