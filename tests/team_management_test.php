@@ -66,3 +66,16 @@ t_assert_true(coachIsLeader($db, $kelId),  'Kel은 팀장');
 t_assert_true(coachIsLeader($db, $nanaId), 'Nana는 팀장');
 t_assert_eq(false, coachIsLeader($db, $luluId), 'Lulu는 팀장 아님');
 t_assert_eq(false, coachIsLeader($db, 99999),   '존재하지 않는 coach_id false');
+
+t_section('coach_team_guard — active 필터');
+$kelId  = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Kel'")->fetchColumn();
+$luluId = (int)$db->query("SELECT id FROM coaches WHERE coach_name='Lulu'")->fetchColumn();
+$origStatus = $db->query("SELECT status FROM coaches WHERE id={$kelId}")->fetchColumn();
+
+// Kel을 임시로 inactive 처리
+$db->prepare("UPDATE coaches SET status='inactive' WHERE id=?")->execute([$kelId]);
+t_assert_eq(false, coachIsLeader($db, $kelId), 'inactive Kel은 팀장 아님');
+t_assert_eq(false, coachIsMyMember($db, $kelId, $luluId), 'inactive 팀장은 멤버 관계 아님');
+// 복원
+$db->prepare("UPDATE coaches SET status=? WHERE id=?")->execute([$origStatus, $kelId]);
+t_assert_true(coachIsLeader($db, $kelId), '복원 후 다시 팀장');
