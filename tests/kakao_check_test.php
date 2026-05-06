@@ -403,3 +403,76 @@ t_section('toggle_flag — invalid flag throws');
 t_assert_throws(function() use ($db, $adminId) {
     kakaoCheckToggleFlag($db, 1, 'unknown', true, null, 'admin', $adminId);
 }, 'InvalidArgumentException', 'flag 값 검증');
+
+t_section('list — coupon/special 컬럼 노출');
+
+if ($activeCoach === 0) {
+    echo "  SKIP\n";
+} else {
+    $db->beginTransaction();
+    $o = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09']);
+    $db->prepare("UPDATE orders SET coupon_issued=1, special_case=1, special_case_note='메모테스트' WHERE id=?")->execute([$o]);
+
+    $result = kakaoCheckList($db, [
+        'cohort' => '2026-04',
+        'coach_id' => $activeCoach,
+        'include_processed' => true,
+        'product' => null,
+    ]);
+    $found = null;
+    foreach ($result['orders'] as $r) {
+        if ((int)$r['order_id'] === $o) { $found = $r; break; }
+    }
+    t_assert_true($found !== null, 'order 찾음');
+    t_assert_eq(1, (int)$found['coupon_issued'], 'coupon_issued 노출');
+    t_assert_eq(1, (int)$found['special_case'], 'special_case 노출');
+    t_assert_eq('메모테스트', $found['special_case_note'], 'note 노출');
+
+    $db->rollBack();
+}
+
+t_section('list — include_processed=false: 세 플래그 모두 0인 행만');
+
+if ($activeCoach === 0) {
+    echo "  SKIP\n";
+} else {
+    $db->beginTransaction();
+    $oClean = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09']);
+    $oKakao = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-11', 'end_date' => '2026-07-10']);
+    $oCoup  = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-12', 'end_date' => '2026-07-11']);
+    $oSpec  = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-13', 'end_date' => '2026-07-12']);
+    $db->prepare("UPDATE orders SET kakao_room_joined=1 WHERE id=?")->execute([$oKakao]);
+    $db->prepare("UPDATE orders SET coupon_issued=1 WHERE id=?")->execute([$oCoup]);
+    $db->prepare("UPDATE orders SET special_case=1 WHERE id=?")->execute([$oSpec]);
+
+    $result = kakaoCheckList($db, [
+        'cohort' => '2026-04',
+        'coach_id' => $activeCoach,
+        'include_processed' => false,
+        'product' => null,
+    ]);
+    $ids = array_map(fn($r) => (int)$r['order_id'], $result['orders']);
+    t_assert_true(in_array($oClean, $ids, true), 'clean: 포함');
+    t_assert_true(!in_array($oKakao, $ids, true), 'kakao=1: 제외');
+    t_assert_true(!in_array($oCoup, $ids, true), 'coupon=1: 제외');
+    t_assert_true(!in_array($oSpec, $ids, true), 'special=1: 제외');
+
+    $db->rollBack();
+}
+
+t_section('list — include_joined alias 호환 (기존 호출자 보호)');
+
+if ($activeCoach === 0) {
+    echo "  SKIP\n";
+} else {
+    $db->beginTransaction();
+    $o = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09']);
+    $db->prepare("UPDATE orders SET kakao_room_joined=1 WHERE id=?")->execute([$o]);
+
+    // 기존 호출 (include_joined=true) → 여전히 포함
+    $r = kakaoCheckList($db, ['cohort' => '2026-04', 'coach_id' => $activeCoach, 'include_joined' => true, 'product' => null]);
+    $ids = array_map(fn($x) => (int)$x['order_id'], $r['orders']);
+    t_assert_true(in_array($o, $ids, true), 'include_joined=true alias 동작');
+
+    $db->rollBack();
+}

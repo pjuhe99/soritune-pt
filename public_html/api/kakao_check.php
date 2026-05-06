@@ -38,7 +38,10 @@ function kakaoCheckList(PDO $db, array $opts): array
 {
     $cohort = $opts['cohort'];
     $coachId = $opts['coach_id'] ?? null;
-    $includeJoined = !empty($opts['include_joined']);
+    // include_processed (신) 우선, 없으면 include_joined (구) fallback
+    $includeProcessed = array_key_exists('include_processed', $opts)
+        ? !empty($opts['include_processed'])
+        : !empty($opts['include_joined']);
     $product = $opts['product'] ?? null;
 
     // ---- products 리스트 (product 필터 무시, scope만 적용) ----
@@ -51,8 +54,8 @@ function kakaoCheckList(PDO $db, array $opts): array
         $pWhere[] = "o.coach_id = ?";
         $pParams[] = $coachId;
     }
-    if (!$includeJoined) {
-        $pWhere[] = "o.kakao_room_joined = 0";
+    if (!$includeProcessed) {
+        $pWhere[] = "o.kakao_room_joined = 0 AND o.coupon_issued = 0 AND o.special_case = 0";
     }
     $pSql = "
         SELECT DISTINCT o.product_name
@@ -88,6 +91,9 @@ function kakaoCheckList(PDO $db, array $opts): array
           COALESCE(o.cohort_month, DATE_FORMAT(o.start_date, '%Y-%m')) AS effective_cohort,
           o.kakao_room_joined,
           o.kakao_room_joined_at,
+          o.coupon_issued,
+          o.special_case,
+          o.special_case_note,
           o.coach_id,
           c.coach_name
         FROM orders o
