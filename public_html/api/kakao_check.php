@@ -307,10 +307,13 @@ switch ($action) {
         } elseif ($user['role'] === 'admin' && !empty($_GET['coach_id'])) {
             $coachId = (int)$_GET['coach_id'];
         }
+        // include_processed (신) 우선, include_joined (구) fallback
+        $rawProcessed = $_GET['include_processed'] ?? $_GET['include_joined'] ?? '';
+        $includeProcessed = $rawProcessed !== '' && $rawProcessed !== '0';
         $result = kakaoCheckList($db, [
             'cohort' => $cohort,
             'coach_id' => $coachId,
-            'include_joined' => !empty($_GET['include_joined']) && $_GET['include_joined'] !== '0',
+            'include_processed' => $includeProcessed,
             'product' => trim($_GET['product'] ?? '') ?: null,
         ]);
         jsonSuccess($result);
@@ -334,6 +337,33 @@ switch ($action) {
 
         kakaoCheckToggle($db, $orderId, $joined, $user['role'], (int)$user['id']);
         jsonSuccess(['joined' => $joined ? 1 : 0]);
+
+    case 'toggle_flag':
+        $input = getJsonInput();
+        $orderId = (int)($input['order_id'] ?? 0);
+        $flag    = (string)($input['flag'] ?? '');
+        $value   = !empty($input['value']);
+        $note    = array_key_exists('note', $input) ? (string)$input['note'] : null;
+        if (!$orderId) jsonError('order_id가 필요합니다');
+        if (!in_array($flag, ['kakao', 'coupon', 'special'], true)) {
+            jsonError("flag는 'kakao'|'coupon'|'special' 중 하나여야 합니다");
+        }
+
+        // 권한: order 존재 확인 + coach는 자기 order만
+        $stmt = $db->prepare("SELECT coach_id FROM orders WHERE id = ?");
+        $stmt->execute([$orderId]);
+        $row = $stmt->fetch();
+        if (!$row) jsonError('order를 찾을 수 없습니다', 404);
+        if ($user['role'] === 'coach' && (int)$row['coach_id'] !== (int)$user['id']) {
+            jsonError('권한이 없습니다', 403);
+        }
+
+        try {
+            $changed = kakaoCheckToggleFlag($db, $orderId, $flag, $value, $note, $user['role'], (int)$user['id']);
+        } catch (InvalidArgumentException $e) {
+            jsonError($e->getMessage());
+        }
+        jsonSuccess(['flag' => $flag, 'value' => $value ? 1 : 0, 'changed' => $changed]);
 
     case 'set_cohort':
         if ($user['role'] !== 'admin') jsonError('관리자만 가능합니다', 403);
