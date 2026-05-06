@@ -52,6 +52,14 @@ try {
     $insOrder($m9, $coachOK,   '소리튜닝 음성PT', '진행중', 0, '2026-05');
     $insOrder($m9, $coachOK,   '소리튜닝 음성PT', '진행중', 0, '2026-05');
 
+    $m10 = $insMember('__t_m10__', '01045454545');  // coupon_issued=1 → 미포함
+    $m11 = $insMember('__t_m11__', '01056565656');  // special_case=1 → 미포함
+
+    $oid10 = $insOrder($m10, $coachOK, '소리튜닝 음성PT', '진행중', 0, '2026-05');
+    $oid11 = $insOrder($m11, $coachOK, '소리튜닝 음성PT', '진행중', 0, '2026-05');
+    $db->prepare("UPDATE orders SET coupon_issued=1 WHERE id=?")->execute([$oid10]);
+    $db->prepare("UPDATE orders SET special_case=1 WHERE id=?")->execute([$oid11]);
+
     $cfg = [
         'product_name' => '소리튜닝 음성PT',
         'status' => ['진행중'],
@@ -102,6 +110,12 @@ try {
     // 9) 같은 회원 2건 → 1행만
     $m9rows = array_filter($rows, fn($r) => str_ends_with($r['row_key'], ":{$m9}"));
     t_assert_eq(1, count($m9rows), '9) DISTINCT 회원 dedup');
+
+    // 13) coupon_issued=1 → 미포함
+    t_assert_true(!isset($byM[$m10]), '13) coupon_issued=1 미포함');
+
+    // 14) special_case=1 → 미포함
+    t_assert_true(!isset($byM[$m11]), '14) special_case=1 미포함');
 
     // 10) cohort_mode='current_month_kst' 동작 (현재 월 가져오기 검증)
     $cfgKst = $cfg; $cfgKst['cohort_mode'] = 'current_month_kst';
