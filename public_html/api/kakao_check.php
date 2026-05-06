@@ -151,6 +151,81 @@ function kakaoCheckToggle(PDO $db, int $orderId, bool $joined, string $actorType
 }
 
 /**
+ * 통합 flag 토글. flag별로 컬럼 매핑.
+ *
+ * @param string      $flag       'kakao' | 'coupon' | 'special'
+ * @param bool        $value      true=ON / false=OFF
+ * @param string|null $note       flag='special' && value=true 일 때만 사용. 빈 문자열은 NULL로 저장.
+ * @param string      $actorType  'admin' | 'coach'
+ * @param int         $actorId    user.id
+ * @return bool  실제로 값이 바뀌었는지 (false면 no-op)
+ */
+function kakaoCheckToggleFlag(PDO $db, int $orderId, string $flag, bool $value, ?string $note, string $actorType, int $actorId): bool
+{
+    if ($flag === 'kakao') {
+        return kakaoCheckToggle($db, $orderId, $value, $actorType, $actorId);
+    }
+    if ($flag !== 'coupon' && $flag !== 'special') {
+        throw new InvalidArgumentException("flag must be 'kakao' | 'coupon' | 'special', got '{$flag}'");
+    }
+
+    $colVal = $flag === 'coupon' ? 'coupon_issued'    : 'special_case';
+    $colAt  = $flag === 'coupon' ? 'coupon_issued_at' : 'special_case_at';
+    $colBy  = $flag === 'coupon' ? 'coupon_issued_by' : 'special_case_by';
+    $hasNote = ($flag === 'special');
+    $colNote = 'special_case_note';
+
+    $selCols = $hasNote ? "{$colVal}, {$colNote}" : $colVal;
+    $current = $db->prepare("SELECT {$selCols} FROM orders WHERE id = ?");
+    $current->execute([$orderId]);
+    $row = $current->fetch();
+    if (!$row) return false;
+
+    $oldVal  = (int)$row[$colVal];
+    $oldNote = $hasNote ? ($row[$colNote] ?? null) : null;
+    $newVal  = $value ? 1 : 0;
+    $newNote = null;
+    if ($hasNote && $value) {
+        $note = $note !== null ? trim($note) : '';
+        $newNote = $note === '' ? null : $note;
+    }
+
+    // no-op: 값 동일 + (special의 경우) note도 동일
+    if ($oldVal === $newVal && (!$hasNote || $oldNote === $newNote)) {
+        return false;
+    }
+
+    if ($value) {
+        if ($hasNote) {
+            $db->prepare("UPDATE orders SET {$colVal}=1, {$colAt}=NOW(), {$colBy}=?, {$colNote}=? WHERE id=?")
+               ->execute([$actorId, $newNote, $orderId]);
+        } else {
+            $db->prepare("UPDATE orders SET {$colVal}=1, {$colAt}=NOW(), {$colBy}=? WHERE id=?")
+               ->execute([$actorId, $orderId]);
+        }
+        $action = "{$flag}_" . ($flag === 'coupon' ? 'issued_set' : 'case_set');
+    } else {
+        if ($hasNote) {
+            $db->prepare("UPDATE orders SET {$colVal}=0, {$colAt}=NULL, {$colBy}=NULL, {$colNote}=NULL WHERE id=?")
+               ->execute([$orderId]);
+        } else {
+            $db->prepare("UPDATE orders SET {$colVal}=0, {$colAt}=NULL, {$colBy}=NULL WHERE id=?")
+               ->execute([$orderId]);
+        }
+        $action = "{$flag}_" . ($flag === 'coupon' ? 'issued_unset' : 'case_unset');
+    }
+
+    $oldLog = [$colVal => $oldVal];
+    $newLog = [$colVal => $newVal];
+    if ($hasNote) {
+        $oldLog[$colNote] = $oldNote;
+        $newLog[$colNote] = $newNote;
+    }
+    logChange($db, 'order', $orderId, $action, $oldLog, $newLog, $actorType, $actorId);
+    return true;
+}
+
+/**
  * 여러 order의 cohort_month를 일괄 설정 (또는 NULL 복원). admin only.
  * 트랜잭션으로 묶어 모두 성공 또는 모두 실패.
  *

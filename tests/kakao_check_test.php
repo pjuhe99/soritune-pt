@@ -273,3 +273,133 @@ if ($activeCoach === 0 || $adminId === 0) {
 
     $db->rollBack();
 }
+
+t_section('toggle_flag — coupon ON');
+
+if ($activeCoach === 0 || $adminId === 0) {
+    echo "  SKIP  active 코치/admin 없음\n";
+} else {
+    $db->beginTransaction();
+    $o = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09']);
+
+    $changed = kakaoCheckToggleFlag($db, $o, 'coupon', true, null, 'admin', $adminId);
+    t_assert_true($changed, 'coupon ON: changed=true');
+
+    $row = $db->query("SELECT coupon_issued, coupon_issued_at, coupon_issued_by FROM orders WHERE id={$o}")->fetch();
+    t_assert_eq(1, (int)$row['coupon_issued'], 'coupon_issued=1');
+    t_assert_true($row['coupon_issued_at'] !== null, 'coupon_issued_at NOT NULL');
+    t_assert_eq($adminId, (int)$row['coupon_issued_by'], 'coupon_issued_by = adminId');
+
+    $log = $db->query("SELECT action, actor_type FROM change_logs WHERE target_type='order' AND target_id={$o} ORDER BY id DESC LIMIT 1")->fetch();
+    t_assert_eq('coupon_issued_set', $log['action'], 'log action = coupon_issued_set');
+    t_assert_eq('admin', $log['actor_type'], 'log actor_type=admin');
+
+    $db->rollBack();
+}
+
+t_section('toggle_flag — coupon OFF + idempotent');
+
+if ($activeCoach === 0 || $adminId === 0) {
+    echo "  SKIP\n";
+} else {
+    $db->beginTransaction();
+    $o = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09']);
+    $db->prepare("UPDATE orders SET coupon_issued=1, coupon_issued_at=NOW(), coupon_issued_by=999 WHERE id=?")->execute([$o]);
+
+    $changed = kakaoCheckToggleFlag($db, $o, 'coupon', false, null, 'admin', $adminId);
+    t_assert_true($changed, 'OFF: 값 바뀜');
+    $row = $db->query("SELECT coupon_issued, coupon_issued_at, coupon_issued_by FROM orders WHERE id={$o}")->fetch();
+    t_assert_eq(0, (int)$row['coupon_issued'], 'coupon_issued=0');
+    t_assert_true($row['coupon_issued_at'] === null, '_at = NULL');
+    t_assert_true($row['coupon_issued_by'] === null, '_by = NULL');
+
+    $logCountBefore = (int)$db->query("SELECT COUNT(*) FROM change_logs WHERE target_type='order' AND target_id={$o}")->fetchColumn();
+    $changed2 = kakaoCheckToggleFlag($db, $o, 'coupon', false, null, 'admin', $adminId);
+    t_assert_eq(false, $changed2, 'idempotent no-op');
+    $logCountAfter = (int)$db->query("SELECT COUNT(*) FROM change_logs WHERE target_type='order' AND target_id={$o}")->fetchColumn();
+    t_assert_eq($logCountBefore, $logCountAfter, 'log 추가 없음');
+
+    $db->rollBack();
+}
+
+t_section('toggle_flag — special ON with note');
+
+if ($activeCoach === 0 || $adminId === 0) {
+    echo "  SKIP\n";
+} else {
+    $db->beginTransaction();
+    $o = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09']);
+
+    $changed = kakaoCheckToggleFlag($db, $o, 'special', true, '문의함 — 다음달 진행 예정', 'admin', $adminId);
+    t_assert_true($changed, 'special ON');
+
+    $row = $db->query("SELECT special_case, special_case_note, special_case_by FROM orders WHERE id={$o}")->fetch();
+    t_assert_eq(1, (int)$row['special_case'], 'special_case=1');
+    t_assert_eq('문의함 — 다음달 진행 예정', $row['special_case_note'], 'note 저장');
+    t_assert_eq($adminId, (int)$row['special_case_by'], '_by');
+
+    $log = $db->query("SELECT action FROM change_logs WHERE target_type='order' AND target_id={$o} ORDER BY id DESC LIMIT 1")->fetch();
+    t_assert_eq('special_case_set', $log['action'], 'log action = special_case_set');
+
+    $db->rollBack();
+}
+
+t_section('toggle_flag — special ON with empty note → NULL');
+
+if ($activeCoach === 0 || $adminId === 0) {
+    echo "  SKIP\n";
+} else {
+    $db->beginTransaction();
+    $o = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09']);
+
+    kakaoCheckToggleFlag($db, $o, 'special', true, '', 'admin', $adminId);
+    $note = $db->query("SELECT special_case_note FROM orders WHERE id={$o}")->fetchColumn();
+    t_assert_true($note === null, '빈 문자열 → NULL');
+
+    $db->rollBack();
+}
+
+t_section('toggle_flag — special OFF resets note');
+
+if ($activeCoach === 0 || $adminId === 0) {
+    echo "  SKIP\n";
+} else {
+    $db->beginTransaction();
+    $o = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09']);
+    $db->prepare("UPDATE orders SET special_case=1, special_case_at=NOW(), special_case_by=999, special_case_note='기존 메모' WHERE id=?")->execute([$o]);
+
+    kakaoCheckToggleFlag($db, $o, 'special', false, null, 'admin', $adminId);
+    $row = $db->query("SELECT special_case, special_case_at, special_case_by, special_case_note FROM orders WHERE id={$o}")->fetch();
+    t_assert_eq(0, (int)$row['special_case'], 'special_case=0');
+    t_assert_true($row['special_case_at'] === null, '_at NULL');
+    t_assert_true($row['special_case_by'] === null, '_by NULL');
+    t_assert_true($row['special_case_note'] === null, '_note NULL');
+
+    $db->rollBack();
+}
+
+t_section('toggle_flag — flag=kakao 위임');
+
+if ($activeCoach === 0 || $adminId === 0) {
+    echo "  SKIP\n";
+} else {
+    $db->beginTransaction();
+    $o = t_make_order($db, ['coach_id' => $activeCoach, 'status' => '진행중', 'start_date' => '2026-04-10', 'end_date' => '2026-07-09']);
+
+    $changed = kakaoCheckToggleFlag($db, $o, 'kakao', true, null, 'admin', $adminId);
+    t_assert_true($changed, 'kakao ON');
+
+    $row = $db->query("SELECT kakao_room_joined FROM orders WHERE id={$o}")->fetch();
+    t_assert_eq(1, (int)$row['kakao_room_joined'], 'kakao_room_joined=1');
+
+    $log = $db->query("SELECT action FROM change_logs WHERE target_type='order' AND target_id={$o} ORDER BY id DESC LIMIT 1")->fetch();
+    t_assert_eq('kakao_room_join', $log['action'], 'log action = kakao_room_join (기존 그대로)');
+
+    $db->rollBack();
+}
+
+t_section('toggle_flag — invalid flag throws');
+
+t_assert_throws(function() use ($db, $adminId) {
+    kakaoCheckToggleFlag($db, 1, 'unknown', true, null, 'admin', $adminId);
+}, 'InvalidArgumentException', 'flag 값 검증');
