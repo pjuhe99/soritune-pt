@@ -1438,3 +1438,23 @@ input, select, textarea {
   border: 1px solid #f44336; border-radius: 6px; margin-bottom: 16px;
   color: #ff8a80;
 }
+
+/* ─────────── kakao-check 기존/신규 배지 ─────────── */
+.badge-returning,
+.badge-new {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-right: 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+.badge-returning {
+  background: #eee;
+  color: #666;
+}
+.badge-new {
+  background: #f57c00;
+  color: #fff;
+}
