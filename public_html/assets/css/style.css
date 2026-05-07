@@ -1443,18 +1443,21 @@ input, select, textarea {
 .badge-returning,
 .badge-new {
   display: inline-block;
-  padding: 1px 6px;
-  margin-right: 4px;
-  border-radius: 3px;
+  padding: 3px 10px;
+  margin-right: 6px;
+  border-radius: 999px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.2px;
   vertical-align: middle;
+  white-space: nowrap;
 }
 .badge-returning {
-  background: #eee;
-  color: #666;
+  background: #4d4d4d;
+  color: #cbcbcb;
 }
 .badge-new {
-  background: #f57c00;
+  background: #FF5E00;
   color: #fff;
 }
