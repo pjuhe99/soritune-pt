@@ -48,6 +48,8 @@ function notifySourcePtOrdersQuery(array $cfg): array {
         LEFT JOIN coaches c ON c.id = o.coach_id
         WHERE o.product_name      = ?
           AND o.kakao_room_joined = ?
+          AND o.coupon_issued     = 0
+          AND o.special_case      = 0
           AND o.cohort_month      = ?
           AND o.status IN ({$statusPlaceholders})
         GROUP BY o.member_id

@@ -8,7 +8,7 @@ CoachApp.registerPage('kakao-check', {
   selectedCohort: null,
   selectedStatuses: new Set(['진행중', '진행예정']),
   selectedProduct: '',
-  includeJoined: false,
+  includeProcessed: false,
 
   async render() {
     document.getElementById('pageContent').innerHTML = `
@@ -80,9 +80,9 @@ CoachApp.registerPage('kakao-check', {
           <option value="">전체 상품</option>
         </select>
         <label style="margin-left:auto; display:inline-flex; align-items:center; gap:6px;">
-          <input type="checkbox" ${this.includeJoined ? 'checked' : ''}
-                 onchange="CoachApp.pages['kakao-check'].toggleIncludeJoined(this.checked)">
-          체크 완료도 보기
+          <input type="checkbox" ${this.includeProcessed ? 'checked' : ''}
+                 onchange="CoachApp.pages['kakao-check'].toggleIncludeProcessed(this.checked)">
+          처리 완료도 보기
         </label>
       </div>
     `;
@@ -104,8 +104,8 @@ CoachApp.registerPage('kakao-check', {
     this.loadList();
   },
 
-  toggleIncludeJoined(checked) {
-    this.includeJoined = checked;
+  toggleIncludeProcessed(checked) {
+    this.includeProcessed = checked;
     this.loadList();
   },
 
@@ -116,7 +116,7 @@ CoachApp.registerPage('kakao-check', {
     const params = new URLSearchParams({
       action: 'list',
       cohort: this.selectedCohort,
-      include_joined: this.includeJoined ? '1' : '0',
+      include_processed: this.includeProcessed ? '1' : '0',
     });
     if (this.selectedProduct) params.set('product', this.selectedProduct);
 
@@ -143,7 +143,9 @@ CoachApp.registerPage('kakao-check', {
       <table class="data-table">
         <thead>
           <tr>
-            <th style="width:32px"></th>
+            <th style="width:32px" title="카톡방 입장">입장</th>
+            <th style="width:32px" title="쿠폰 지급">쿠폰</th>
+            <th style="width:60px" title="특이 건">특이</th>
             <th>이름</th>
             <th>전화번호</th>
             <th>이메일</th>
@@ -163,11 +165,30 @@ CoachApp.registerPage('kakao-check', {
   },
 
   _row(o) {
-    const checked = parseInt(o.kakao_room_joined, 10) === 1;
+    const kakaoOn = parseInt(o.kakao_room_joined, 10) === 1;
+    const couponOn = parseInt(o.coupon_issued, 10) === 1;
+    const specialOn = parseInt(o.special_case, 10) === 1;
+    const dim = kakaoOn || couponOn || specialOn;
+
+    const note = (o.special_case_note || '').trim();
+    const noteShort = note.length > 16 ? note.slice(0, 16) + '…' : note;
+    const noteHtml = specialOn
+      ? `<small style="display:block; color:#888; cursor:pointer; font-size:11px;"
+                title="${UI.esc(note)}"
+                onclick="CoachApp.pages['kakao-check'].editSpecialNote(${o.order_id})">${UI.esc(noteShort) || '메모 없음'}</small>`
+      : '';
+
     return `
-      <tr id="kakao-row-${o.order_id}" style="${checked ? 'opacity:0.55' : ''}">
-        <td><input type="checkbox" ${checked ? 'checked' : ''}
-                   onclick="CoachApp.pages['kakao-check'].toggleJoin(${o.order_id}, this.checked)"></td>
+      <tr id="kakao-row-${o.order_id}" style="${dim ? 'opacity:0.55' : ''}">
+        <td><input type="checkbox" ${kakaoOn ? 'checked' : ''}
+                   onclick="CoachApp.pages['kakao-check'].toggleFlag(${o.order_id}, 'kakao', this.checked)"></td>
+        <td><input type="checkbox" ${couponOn ? 'checked' : ''}
+                   onclick="CoachApp.pages['kakao-check'].toggleFlag(${o.order_id}, 'coupon', this.checked)"></td>
+        <td>
+          <input type="checkbox" ${specialOn ? 'checked' : ''}
+                 onclick="CoachApp.pages['kakao-check'].toggleFlag(${o.order_id}, 'special', this.checked)">
+          ${noteHtml}
+        </td>
         <td>${UI.esc(o.name)}</td>
         <td style="color:var(--text-secondary)">${UI.esc(o.phone) || '-'}</td>
         <td style="color:var(--text-secondary)">${UI.esc(o.email) || '-'}</td>
@@ -187,8 +208,8 @@ CoachApp.registerPage('kakao-check', {
       if (row) row.querySelector('input[type=checkbox]').checked = !joined;
       return;
     }
-    // include_joined=false면 fade out 후 행 제거
-    if (!this.includeJoined && joined) {
+    // include_processed=false면 fade out 후 행 제거
+    if (!this.includeProcessed && joined) {
       if (row) {
         row.style.transition = 'opacity 0.3s';
         row.style.opacity = '0';
@@ -198,5 +219,52 @@ CoachApp.registerPage('kakao-check', {
       // 그 외엔 단순히 행 스타일 갱신
       if (row) row.style.opacity = joined ? '0.55' : '1';
     }
+  },
+
+  async toggleFlag(orderId, flag, checked) {
+    const row = document.getElementById(`kakao-row-${orderId}`);
+    const checkbox = row?.querySelector(`td input[type=checkbox][onclick*="'${flag}'"]`);
+
+    let note = null;
+    if (flag === 'special' && checked) {
+      note = prompt('특이 사유를 입력하세요 (없으면 비워두세요)', '');
+      if (note === null) {
+        if (checkbox) checkbox.checked = false;
+        return;
+      }
+    }
+
+    const res = await API.post('/api/kakao_check.php?action=toggle_flag', {
+      order_id: orderId, flag, value: checked ? 1 : 0, note,
+    });
+    if (!res.ok) {
+      alert(res.message || '실패');
+      if (checkbox) checkbox.checked = !checked;
+      return;
+    }
+
+    if (!this.includeProcessed && checked) {
+      if (row) {
+        row.style.transition = 'opacity 0.3s';
+        row.style.opacity = '0';
+        setTimeout(() => this.loadList(), 320);
+      }
+    } else {
+      this.loadList();
+    }
+  },
+
+  async editSpecialNote(orderId) {
+    const row = document.getElementById(`kakao-row-${orderId}`);
+    const small = row?.querySelector('td:nth-child(3) small');
+    const currentNote = small?.getAttribute('title') || '';
+    const note = prompt('특이 사유를 입력하세요 (없으면 비워두세요)', currentNote);
+    if (note === null) return;
+
+    const res = await API.post('/api/kakao_check.php?action=toggle_flag', {
+      order_id: orderId, flag: 'special', value: 1, note,
+    });
+    if (!res.ok) { alert(res.message || '실패'); return; }
+    this.loadList();
   },
 });
