@@ -95,6 +95,16 @@ function kakaoCheckList(PDO $db, array $opts): array
           o.special_case,
           o.special_case_note,
           o.coach_id,
+          (SELECT p.coach_id
+             FROM orders p
+            WHERE p.member_id = o.member_id
+              AND p.id <> o.id
+              AND p.product_name = o.product_name
+              AND p.status NOT IN ('환불','중단')
+              AND COALESCE(p.cohort_month, DATE_FORMAT(p.start_date, '%Y-%m'))
+                   < COALESCE(o.cohort_month, DATE_FORMAT(o.start_date, '%Y-%m'))
+            ORDER BY COALESCE(p.cohort_month, DATE_FORMAT(p.start_date, '%Y-%m')) DESC, p.id DESC
+            LIMIT 1) AS prev_coach_id,
           c.coach_name
         FROM orders o
         JOIN members m ON m.id = o.member_id

@@ -222,6 +222,13 @@ App.registerPage('kakao-check', {
                 onclick="App.pages['kakao-check'].editSpecialNote(${o.order_id})">${UI.esc(noteShort) || '메모 없음'}</small>`
       : '';
 
+    const prevCoachId = o.prev_coach_id != null ? parseInt(o.prev_coach_id, 10) : null;
+    const curCoachId = o.coach_id != null ? parseInt(o.coach_id, 10) : null;
+    const isReturning = prevCoachId !== null && curCoachId !== null && prevCoachId === curCoachId;
+    const badge = isReturning
+      ? '<span class="badge-returning">기존</span>'
+      : '<span class="badge-new">신규</span>';
+
     return `
       <tr id="kakao-row-${o.order_id}" style="${dim ? 'opacity:0.55' : ''}">
         <td><input type="checkbox" ${selected ? 'checked' : ''}
@@ -235,7 +242,7 @@ App.registerPage('kakao-check', {
                  onclick="App.pages['kakao-check'].toggleFlag(${o.order_id}, 'special', this.checked)">
           ${noteHtml}
         </td>
-        <td>${UI.esc(o.name)}</td>
+        <td>${badge} ${UI.esc(o.name)}</td>
         <td style="color:var(--text-secondary)">${UI.esc(o.phone) || '-'}</td>
         <td style="color:var(--text-secondary)">${UI.esc(o.email) || '-'}</td>
         <td>${UI.esc(o.product_name)}</td>

@@ -476,3 +476,184 @@ if ($activeCoach === 0) {
 
     $db->rollBack();
 }
+
+t_section('list — prev_coach_id: 같은 코치 같은 product → 본인 coach_id');
+
+if ($activeCoach === 0) {
+    echo "  SKIP\n";
+} else {
+    $db->beginTransaction();
+    // 같은 회원의 직전 cohort 정상 order (같은 코치, 같은 product)
+    $prev = t_make_order($db, [
+        'coach_id' => $activeCoach,
+        'status' => '종료',
+        'start_date' => '2026-03-10',
+        'end_date'   => '2026-04-09',
+        'product_name' => '소리튜닝 음성PT',
+    ]);
+    // 직전 order 의 member_id 를 새 order 와 동일하게 맞춤
+    $memberId = (int)$db->query("SELECT member_id FROM orders WHERE id={$prev}")->fetchColumn();
+    $cur = t_make_order($db, [
+        'coach_id' => $activeCoach,
+        'status' => '진행중',
+        'start_date' => '2026-04-15',
+        'end_date'   => '2026-07-14',
+        'product_name' => '소리튜닝 음성PT',
+    ]);
+    $db->prepare("UPDATE orders SET member_id=? WHERE id=?")->execute([$memberId, $cur]);
+
+    $r = kakaoCheckList($db, [
+        'cohort' => '2026-04', 'coach_id' => $activeCoach,
+        'include_processed' => true, 'product' => null,
+    ]);
+    $found = null;
+    foreach ($r['orders'] as $row) {
+        if ((int)$row['order_id'] === $cur) { $found = $row; break; }
+    }
+    t_assert_true($found !== null, '현재 order 결과에 포함');
+    t_assert_eq($activeCoach, (int)$found['prev_coach_id'], 'prev_coach_id = activeCoach');
+
+    $db->rollBack();
+}
+
+t_section('list — prev_coach_id: 직전이 다른 코치');
+
+if ($activeCoach === 0 || $otherCoach === 0) {
+    echo "  SKIP\n";
+} else {
+    $db->beginTransaction();
+    $prev = t_make_order($db, [
+        'coach_id' => $otherCoach,
+        'status' => '종료',
+        'start_date' => '2026-03-10',
+        'end_date'   => '2026-04-09',
+        'product_name' => '소리튜닝 음성PT',
+    ]);
+    $memberId = (int)$db->query("SELECT member_id FROM orders WHERE id={$prev}")->fetchColumn();
+    $cur = t_make_order($db, [
+        'coach_id' => $activeCoach,
+        'status' => '진행중',
+        'start_date' => '2026-04-15',
+        'end_date'   => '2026-07-14',
+        'product_name' => '소리튜닝 음성PT',
+    ]);
+    $db->prepare("UPDATE orders SET member_id=? WHERE id=?")->execute([$memberId, $cur]);
+
+    $r = kakaoCheckList($db, [
+        'cohort' => '2026-04', 'coach_id' => $activeCoach,
+        'include_processed' => true, 'product' => null,
+    ]);
+    $found = null;
+    foreach ($r['orders'] as $row) {
+        if ((int)$row['order_id'] === $cur) { $found = $row; break; }
+    }
+    t_assert_true($found !== null, '결과에 포함');
+    t_assert_eq($otherCoach, (int)$found['prev_coach_id'], 'prev_coach_id = otherCoach');
+    t_assert_true((int)$found['prev_coach_id'] !== (int)$found['coach_id'], 'prev != cur');
+
+    $db->rollBack();
+}
+
+t_section('list — prev_coach_id: 다른 product 직전 order 는 무시');
+
+if ($activeCoach === 0) {
+    echo "  SKIP\n";
+} else {
+    $db->beginTransaction();
+    // 직전 order 가 화상PT (다른 product)
+    $prev = t_make_order($db, [
+        'coach_id' => $activeCoach,
+        'status' => '종료',
+        'start_date' => '2026-03-10',
+        'end_date'   => '2026-04-09',
+        'product_name' => '소리튜닝 화상PT',
+    ]);
+    $memberId = (int)$db->query("SELECT member_id FROM orders WHERE id={$prev}")->fetchColumn();
+    $cur = t_make_order($db, [
+        'coach_id' => $activeCoach,
+        'status' => '진행중',
+        'start_date' => '2026-04-15',
+        'end_date'   => '2026-07-14',
+        'product_name' => '소리튜닝 음성PT',
+    ]);
+    $db->prepare("UPDATE orders SET member_id=? WHERE id=?")->execute([$memberId, $cur]);
+
+    $r = kakaoCheckList($db, [
+        'cohort' => '2026-04', 'coach_id' => $activeCoach,
+        'include_processed' => true, 'product' => null,
+    ]);
+    $found = null;
+    foreach ($r['orders'] as $row) {
+        if ((int)$row['order_id'] === $cur) { $found = $row; break; }
+    }
+    t_assert_true($found !== null, '결과에 포함');
+    t_assert_true($found['prev_coach_id'] === null, '다른 product → prev_coach_id NULL');
+
+    $db->rollBack();
+}
+
+t_section('list — prev_coach_id: 환불/중단 order 는 무시');
+
+if ($activeCoach === 0) {
+    echo "  SKIP\n";
+} else {
+    $db->beginTransaction();
+    $prev = t_make_order($db, [
+        'coach_id' => $activeCoach,
+        'status' => '환불',
+        'start_date' => '2026-03-10',
+        'end_date'   => '2026-04-09',
+        'product_name' => '소리튜닝 음성PT',
+    ]);
+    $memberId = (int)$db->query("SELECT member_id FROM orders WHERE id={$prev}")->fetchColumn();
+    $cur = t_make_order($db, [
+        'coach_id' => $activeCoach,
+        'status' => '진행중',
+        'start_date' => '2026-04-15',
+        'end_date'   => '2026-07-14',
+        'product_name' => '소리튜닝 음성PT',
+    ]);
+    $db->prepare("UPDATE orders SET member_id=? WHERE id=?")->execute([$memberId, $cur]);
+
+    $r = kakaoCheckList($db, [
+        'cohort' => '2026-04', 'coach_id' => $activeCoach,
+        'include_processed' => true, 'product' => null,
+    ]);
+    $found = null;
+    foreach ($r['orders'] as $row) {
+        if ((int)$row['order_id'] === $cur) { $found = $row; break; }
+    }
+    t_assert_true($found !== null, '결과에 포함');
+    t_assert_true($found['prev_coach_id'] === null, '환불 → prev_coach_id NULL');
+
+    $db->rollBack();
+}
+
+t_section('list — prev_coach_id: 이전 order 없음 → NULL');
+
+if ($activeCoach === 0) {
+    echo "  SKIP\n";
+} else {
+    $db->beginTransaction();
+    $cur = t_make_order($db, [
+        'coach_id' => $activeCoach,
+        'status' => '진행중',
+        'start_date' => '2026-04-15',
+        'end_date'   => '2026-07-14',
+        'product_name' => '소리튜닝 음성PT',
+    ]);
+    // 새 member 그대로 (t_make_order 가 매번 새 member 생성하는 구조 가정)
+
+    $r = kakaoCheckList($db, [
+        'cohort' => '2026-04', 'coach_id' => $activeCoach,
+        'include_processed' => true, 'product' => null,
+    ]);
+    $found = null;
+    foreach ($r['orders'] as $row) {
+        if ((int)$row['order_id'] === $cur) { $found = $row; break; }
+    }
+    t_assert_true($found !== null, '결과에 포함');
+    t_assert_true($found['prev_coach_id'] === null, '이전 order 없음 → NULL');
+
+    $db->rollBack();
+}
