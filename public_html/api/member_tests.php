@@ -49,6 +49,31 @@ function memberTestsSubmitImpl(PDO $db, array $user, array $input): array
     ];
 }
 
+/**
+ * 회원 본인의 최신 결과 1건 조회.
+ *
+ * @return array ['result' => array|null]
+ */
+function memberTestsLatestImpl(PDO $db, array $user, string $testType): array
+{
+    if (!in_array($testType, ['sensory', 'disc'], true)) {
+        throw new InvalidArgumentException("test_type must be sensory|disc");
+    }
+    $stmt = $db->prepare(
+        "SELECT id, member_id, test_type, result_data, tested_at, memo, created_at
+         FROM test_results
+         WHERE member_id = ? AND test_type = ?
+         ORDER BY tested_at DESC, id DESC
+         LIMIT 1"
+    );
+    $stmt->execute([(int)$user['id'], $testType]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return ['result' => null];
+
+    $row['result_data'] = json_decode($row['result_data'], true);
+    return ['result' => $row];
+}
+
 // 테스트가 require 했을 때는 라우팅 실행 안 함
 if (basename($_SERVER['SCRIPT_NAME'] ?? '') !== 'member_tests.php') {
     return;
@@ -68,6 +93,16 @@ switch ($action) {
             jsonError($e->getMessage(), 400);
         }
         jsonSuccess($out, '결과가 저장되었습니다');
+    }
+
+    case 'latest': {
+        $testType = (string)($_GET['test_type'] ?? '');
+        try {
+            $out = memberTestsLatestImpl($db, $user, $testType);
+        } catch (InvalidArgumentException $e) {
+            jsonError($e->getMessage(), 400);
+        }
+        jsonSuccess($out);
     }
 
     default:
