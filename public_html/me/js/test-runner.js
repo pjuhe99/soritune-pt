@@ -34,7 +34,7 @@ const MeTestRunner = {
     s.root.innerHTML = `
       <div class="me-shell">
         <header class="me-header">
-          <button class="me-btn me-btn-ghost" id="meBackBtn">← 대시보드</button>
+          <button class="me-btn me-btn-ghost" id="meBackBtn">← 메인으로</button>
           <div class="me-greet">${s.testType === 'sensory' ? '오감각 테스트' : '시험'}</div>
         </header>
         <main class="me-test">

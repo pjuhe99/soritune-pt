@@ -63,7 +63,7 @@ const MeResultView = {
     root.innerHTML = `
       <div class="me-shell">
         <header class="me-header">
-          <button class="me-btn me-btn-ghost" id="meBackBtn">← 대시보드</button>
+          <button class="me-btn me-btn-ghost" id="meBackBtn">← 메인으로</button>
         </header>
         <main class="me-result">
           <div class="me-result-top">
@@ -88,7 +88,7 @@ const MeResultView = {
           </section>
           <div class="me-result-actions">
             <button class="me-btn me-btn-outline" id="meRetry">다시 하기</button>
-            <button class="me-btn me-btn-primary" id="meBackDash">대시보드</button>
+            <button class="me-btn me-btn-primary" id="meBackDash">메인으로</button>
           </div>
         </main>
       </div>
