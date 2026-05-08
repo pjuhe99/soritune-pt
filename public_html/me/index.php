@@ -32,6 +32,9 @@ window.__BOOT__ = { isLoggedIn: <?= $isLoggedIn ? 'true' : 'false' ?> };
 <script src="/me/js/test-runner.js"></script>
 <script src="/me/js/sensory.js"></script>
 <script src="/me/js/result-view.js"></script>
+<script src="/me/js/disc-runner.js"></script>
+<script src="/me/js/disc.js"></script>
+<script src="/me/js/disc-result-view.js"></script>
 <script>MeApp.init();</script>
 </body>
 </html>

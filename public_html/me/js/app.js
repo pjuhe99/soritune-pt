@@ -52,9 +52,17 @@ const MeApp = {
     } else if (view === 'dashboard') {
       MeDashboard.render(this.root, member);
     } else if (view === 'test') {
-      MeTestRunner.start(this.root, params.testType, member);
+      if (params.testType === 'disc') {
+        MeDiscRunner.start(this.root, member);
+      } else {
+        MeTestRunner.start(this.root, params.testType, member);
+      }
     } else if (view === 'result') {
-      MeResultView.render(this.root, params.testType, params.resultData);
+      if (params.testType === 'disc') {
+        MeDiscResultView.render(this.root, params.resultData);
+      } else {
+        MeResultView.render(this.root, params.testType, params.resultData);
+      }
     }
   },
 

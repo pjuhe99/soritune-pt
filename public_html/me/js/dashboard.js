@@ -18,11 +18,14 @@ const MeDashboard = {
   },
 
   async loadCards() {
-    const sensory = await MeAPI.get('/api/member_tests.php?action=latest&test_type=sensory');
+    const [sensory, disc] = await Promise.all([
+      MeAPI.get('/api/member_tests.php?action=latest&test_type=sensory'),
+      MeAPI.get('/api/member_tests.php?action=latest&test_type=disc'),
+    ]);
     const cards = document.getElementById('meCards');
     cards.innerHTML = `
       ${this.renderSensoryCard(sensory.ok ? sensory.data.result : null)}
-      ${this.renderDiscCard()}
+      ${this.renderDiscCard(disc.ok ? disc.data.result : null)}
     `;
     this.bindCards();
   },
@@ -53,12 +56,30 @@ const MeDashboard = {
     `;
   },
 
-  renderDiscCard() {
+  renderDiscCard(latest) {
+    if (latest) {
+      const data = latest.result_data || {};
+      const label = data.primary && data.title ? `${data.primary} ${data.title}` : '-';
+      return `
+        <div class="me-card">
+          <div class="me-card-title">DISC 진단</div>
+          <div class="me-card-meta">최근 응시: ${MeUI.esc(MeUI.formatDate(latest.tested_at))}</div>
+          <div class="me-card-result">${MeUI.esc(label)}</div>
+          <div class="me-card-actions">
+            <button class="me-btn me-btn-primary" data-action="view-disc">내 결과 보기</button>
+            <button class="me-btn me-btn-outline" data-action="retake-disc">다시 보기</button>
+          </div>
+        </div>
+      `;
+    }
     return `
-      <div class="me-card me-card-disabled">
+      <div class="me-card">
         <div class="me-card-title">DISC 진단</div>
-        <div class="me-card-meta">준비 중</div>
-        <div class="me-card-desc">곧 응시 가능합니다</div>
+        <div class="me-card-meta">미응시</div>
+        <div class="me-card-desc">10개 문항으로 나의 성향 유형을 알아봅니다 (3분 소요)</div>
+        <div class="me-card-actions">
+          <button class="me-btn me-btn-primary" data-action="start-disc">시험 시작하기</button>
+        </div>
       </div>
     `;
   },
@@ -73,6 +94,13 @@ const MeDashboard = {
           const res = await MeAPI.get('/api/member_tests.php?action=latest&test_type=sensory');
           if (res.ok && res.data.result) {
             MeApp.go('result', { testType: 'sensory', resultData: res.data.result.result_data });
+          }
+        } else if (action === 'start-disc' || action === 'retake-disc') {
+          MeApp.go('test', { testType: 'disc' });
+        } else if (action === 'view-disc') {
+          const res = await MeAPI.get('/api/member_tests.php?action=latest&test_type=disc');
+          if (res.ok && res.data.result) {
+            MeApp.go('result', { testType: 'disc', resultData: res.data.result.result_data });
           }
         }
       };
