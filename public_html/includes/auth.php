@@ -47,3 +47,13 @@ function requireAnyAuth(): array {
     }
     return $user;
 }
+
+function requireMember(): array {
+    $user = getCurrentUser();
+    if (!$user || ($user['role'] ?? null) !== 'member') {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'message' => '회원 로그인이 필요합니다'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    return $user;
+}
