@@ -5,6 +5,7 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/tests/sensory_meta.php';
+require_once __DIR__ . '/../includes/tests/disc_meta.php';
 
 /**
  * Submit 본 로직 — 세션·HTTP 우회해서 단위테스트 가능하도록 분리.
@@ -18,19 +19,34 @@ require_once __DIR__ . '/../includes/tests/sensory_meta.php';
 function memberTestsSubmitImpl(PDO $db, array $user, array $input): array
 {
     $testType = $input['test_type'] ?? '';
-    if (!in_array($testType, ['sensory'], true)) {
-        // DISC 는 별도 spec — 본 spec 에서는 sensory 만
-        throw new InvalidArgumentException("test_type must be 'sensory'");
+    if (!in_array($testType, ['sensory', 'disc'], true)) {
+        throw new InvalidArgumentException("test_type must be 'sensory' or 'disc'");
     }
 
     $answers = $input['answers'] ?? null;
     if (!is_array($answers)) {
         throw new InvalidArgumentException('answers must be an array');
     }
-    // 정수 캐스팅 후 Sensory::score 가 길이/값 검증
-    $answers = array_map(static fn($a) => is_int($a) ? $a : (is_numeric($a) ? (int)$a : -1), $answers);
 
-    $resultData = Sensory::score($answers); // throws InvalidArgumentException
+    if ($testType === 'sensory') {
+        // Flat int[] of length 48
+        $answers = array_map(static fn($a) => is_int($a) ? $a : (is_numeric($a) ? (int)$a : -1), $answers);
+        $resultData = Sensory::score($answers);
+    } else {
+        // disc: int[][] — 10 inner arrays of 4 ints
+        $coerced = [];
+        foreach ($answers as $inner) {
+            if (!is_array($inner)) {
+                $coerced[] = [-1, -1, -1, -1];
+                continue;
+            }
+            $coerced[] = array_map(
+                static fn($a) => is_int($a) ? $a : (is_numeric($a) ? (int)$a : -1),
+                $inner
+            );
+        }
+        $resultData = Disc::score($coerced);
+    }
 
     $stmt = $db->prepare(
         "INSERT INTO test_results (member_id, test_type, result_data, tested_at, memo)
