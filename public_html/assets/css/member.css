@@ -81,3 +81,20 @@
 .me-result-actions .me-btn { flex: 1; width: auto; margin-top: 0; }
 
 .me-error { padding: 40px; text-align: center; color: #f3727f; }
+
+/* === DISC === */
+.me-disc-keywords { display: flex; gap: 8px; padding: 16px 20px 0; flex-wrap: wrap; }
+.me-disc-chip { display: inline-block; padding: 6px 12px; background: #2a2a2a; color: var(--accent); border-radius: 9999px; font-size: 12px; font-weight: 700; }
+.me-score-fill.me-score-disc { background: var(--accent); }
+.me-disc-rank { font-size: 11px; color: var(--text-secondary); width: 56px; flex-shrink: 0; text-align: right; }
+
+/* DISC test runner: word card with rank label + X button */
+.me-q-disc { position: relative; }
+.me-q-rank { width: 36px; flex-shrink: 0; font-size: 13px; font-weight: 700; color: var(--accent); text-align: center; }
+.me-q-x {
+  position: absolute; top: 50%; right: 10px; transform: translateY(-50%);
+  width: 28px; height: 28px; border-radius: 50%; border: none;
+  background: #4a4a4a; color: #fff; font-size: 16px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.me-q-x:hover { background: #6a6a6a; }
