@@ -151,9 +151,31 @@ CoachApp.registerPage('member-chart', {
         <div class="card" style="margin-bottom:8px;padding:12px;background:var(--surface-card)">
           <span class="badge badge-${r.test_type==='disc'?'진행예정':'매칭대기'}">${r.test_type==='disc'?'DISC':'오감각'}</span>
           <span style="font-size:12px;color:var(--text-secondary);margin-left:8px">${UI.esc(r.tested_at)}</span>
-          <div style="margin-top:8px">${UI.esc(JSON.stringify(JSON.parse(r.result_data || '{}')))}</div>
+          <div style="margin-top:8px">${this.formatTestResult(r.test_type, r.result_data)}</div>
         </div>
       `).join('');
+  },
+
+  formatTestResult(testType, data) {
+    let parsed;
+    try { parsed = typeof data === 'string' ? JSON.parse(data) : data; } catch { return UI.esc(String(data || '-')); }
+    if (!parsed || typeof parsed !== 'object') return UI.esc(String(parsed || '-'));
+
+    // Legacy free-form (어드민이 손으로 입력했던 옛 row): version 없음 또는 percents 없음
+    const isNewSensory = testType === 'sensory' && parsed.version === 1 && parsed.percents;
+    if (!isNewSensory) {
+      // Legacy fallback: 기존 dump 식
+      if (Array.isArray(parsed)) return UI.esc(parsed.join(', '));
+      return UI.esc(Object.entries(parsed).map(([k,v]) => `${k}: ${v}`).join(' | '));
+    }
+
+    const p = parsed.percents;
+    return `
+      <div style="font-weight:700;margin-bottom:4px">${UI.esc(parsed.title || '')}</div>
+      <div style="font-size:12px;color:var(--text-secondary)">
+        청각 ${p.auditory ?? 0}%  ·  시각 ${p.visual ?? 0}%  ·  체각 ${p.kinesthetic ?? 0}%
+      </div>
+    `;
   },
 
   ACTION_LABELS: {
