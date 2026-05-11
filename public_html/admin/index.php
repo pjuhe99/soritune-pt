@@ -95,6 +95,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 </div>
 
 <script src="/admin/js/app.js"></script>
+<script src="/assets/js/coaching-chart.js?v=20260511"></script>
 <script src="/admin/js/pages/coaches.js"></script>
 <script src="/admin/js/pages/members.js"></script>
 <script src="/admin/js/pages/member-chart.js"></script>

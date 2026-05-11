@@ -97,6 +97,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 </div>
 
 <script src="/coach/js/app.js"></script>
+<script src="/assets/js/coaching-chart.js?v=20260511"></script>
 <script src="/coach/js/pages/my-members.js"></script>
 <script src="/coach/js/pages/kakao-check.js"></script>
 <script src="/coach/js/pages/member-chart.js"></script>
