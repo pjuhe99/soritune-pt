@@ -385,7 +385,7 @@ App.registerPage('member-chart', {
             <div style="display:flex;justify-content:space-between;align-items:center">
               <div>
                 <span style="font-size:12px;color:var(--text-secondary)">${UI.esc(r.tested_at)}</span>
-                <div style="margin-top:4px">${UI.esc(this.formatTestData(r.result_data))}</div>
+                <div style="margin-top:4px">${this.formatTestResult(r.test_type, r.result_data)}</div>
                 ${r.memo ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${UI.esc(r.memo)}</div>` : ''}
               </div>
               <button class="btn btn-small btn-outline" onclick="App.pages['member-chart'].deleteTest(${r.id})">삭제</button>
@@ -400,7 +400,7 @@ App.registerPage('member-chart', {
             <div style="display:flex;justify-content:space-between;align-items:center">
               <div>
                 <span style="font-size:12px;color:var(--text-secondary)">${UI.esc(r.tested_at)}</span>
-                <div style="margin-top:4px">${UI.esc(this.formatTestData(r.result_data))}</div>
+                <div style="margin-top:4px">${this.formatTestResult(r.test_type, r.result_data)}</div>
                 ${r.memo ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${UI.esc(r.memo)}</div>` : ''}
               </div>
               <button class="btn btn-small btn-outline" onclick="App.pages['member-chart'].deleteTest(${r.id})">삭제</button>
@@ -411,15 +411,37 @@ App.registerPage('member-chart', {
     `;
   },
 
-  formatTestData(data) {
-    try {
-      const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-      if (Array.isArray(parsed)) return parsed.join(', ');
-      if (typeof parsed === 'object') {
-        return Object.entries(parsed).map(([k,v]) => `${k}: ${v}`).join(' | ');
-      }
-      return String(parsed);
-    } catch { return String(data || '-'); }
+  formatTestResult(testType, data) {
+    let parsed;
+    try { parsed = typeof data === 'string' ? JSON.parse(data) : data; } catch { return UI.esc(String(data || '-')); }
+    if (!parsed || typeof parsed !== 'object') return UI.esc(String(parsed || '-'));
+
+    const isNewSensory = testType === 'sensory' && parsed.version === 1 && parsed.percents;
+    const isNewDisc    = testType === 'disc'    && parsed.version === 1 && parsed.scores && parsed.primary;
+
+    if (isNewSensory) {
+      const p = parsed.percents;
+      return `
+        <div style="font-weight:700;margin-bottom:4px">${UI.esc(parsed.title || '')}</div>
+        <div style="font-size:12px;color:var(--text-secondary)">
+          청각 ${p.auditory ?? 0}%  ·  시각 ${p.visual ?? 0}%  ·  체각 ${p.kinesthetic ?? 0}%
+        </div>
+      `;
+    }
+
+    if (isNewDisc) {
+      const s = parsed.scores;
+      return `
+        <div style="font-weight:700;margin-bottom:4px">${UI.esc(parsed.title || '')} (${UI.esc(parsed.primary || '')})</div>
+        <div style="font-size:12px;color:var(--text-secondary)">
+          D ${s.D ?? 0}  ·  I ${s.I ?? 0}  ·  S ${s.S ?? 0}  ·  C ${s.C ?? 0}
+        </div>
+      `;
+    }
+
+    // Legacy fallback
+    if (Array.isArray(parsed)) return UI.esc(parsed.join(', '));
+    return UI.esc(Object.entries(parsed).map(([k,v]) => `${k}: ${v}`).join(' | '));
   },
 
   async showTestForm() {
