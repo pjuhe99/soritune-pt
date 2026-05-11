@@ -44,5 +44,3 @@ $m2 = CoachingMetrics::for_order($order_id);
 t_assert_eq(0.0, $m2['improvement_rate'], 'improvement_rate=0 when no solutions');
 
 $pdo->rollBack();
-
-exit(t_summary());

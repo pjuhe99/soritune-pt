@@ -37,5 +37,3 @@ t_assert_eq(
     coach_can_access_member($coach_id, 99999999),
     'coach cannot access non-existent member'
 );
-
-exit(t_summary());

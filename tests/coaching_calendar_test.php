@@ -52,5 +52,3 @@ $found = CoachingCalendar::get_for_order($oid);
 t_assert_eq($cal, (int)$found['id'], 'lookup by cohort_month+product_name');
 
 $pdo->rollBack();
-
-exit(t_summary());

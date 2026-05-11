@@ -53,5 +53,3 @@ $done = (int)$pdo->query("SELECT COUNT(*) FROM order_sessions WHERE order_id=$oi
 t_assert_eq(3, $done, 'bulk completion');
 
 $pdo->rollBack();
-
-exit(t_summary());
