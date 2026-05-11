@@ -54,12 +54,16 @@ const MeApp = {
     } else if (view === 'test') {
       if (params.testType === 'disc') {
         MeDiscRunner.start(this.root, member);
+      } else if (params.testType === 'voice_intake') {
+        MeVoiceIntakeRunner.start(this.root, member);
       } else {
         MeTestRunner.start(this.root, params.testType, member);
       }
     } else if (view === 'result') {
       if (params.testType === 'disc') {
         MeDiscResultView.render(this.root, params.resultData);
+      } else if (params.testType === 'voice_intake') {
+        MeVoiceIntakeRunner.renderResult(this.root, params.resultData);
       } else {
         MeResultView.render(this.root, params.testType, params.resultData);
       }
