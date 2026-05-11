@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/../includes/coaching_metrics.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -87,7 +88,13 @@ switch ($action) {
         ";
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
-        jsonSuccess(['members' => $stmt->fetchAll()]);
+        $rows = $stmt->fetchAll();
+        // Task 11b: 진도율/개선율 컬럼 — N+1 OK (plan 명시)
+        foreach ($rows as &$r) {
+            $r['metrics'] = CoachingMetrics::for_member((int)$r['id']);
+        }
+        unset($r);
+        jsonSuccess(['members' => $rows]);
 
     case 'active_products':
         $where = ["o.status = '진행중'"];
