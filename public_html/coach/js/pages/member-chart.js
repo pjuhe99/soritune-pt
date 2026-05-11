@@ -45,6 +45,7 @@ CoachApp.registerPage('member-chart', {
         <button class="tab-btn" onclick="CoachApp.pages['member-chart'].loadNotes()">메모</button>
         <button class="tab-btn" onclick="CoachApp.pages['member-chart'].loadTests()">테스트결과</button>
         <button class="tab-btn" onclick="CoachApp.pages['member-chart'].loadLogs()">변경로그</button>
+        <button class="tab-btn" onclick="CoachApp.pages['member-chart'].loadCoaching()">코칭 로그</button>
       </div>
       <div id="tabContent"></div>
     `;
@@ -262,5 +263,15 @@ CoachApp.registerPage('member-chart', {
           ${logs.map(l => `<tr><td style="font-size:11px;color:var(--text-secondary)">${UI.esc(l.created_at)}</td>
           <td style="font-size:12px">${UI.esc(this.formatAction(l.action))}</td><td style="font-size:12px">${UI.esc(this.formatActor(l))}</td></tr>`).join('')}
         </tbody></table>`;
+  },
+
+  loadCoaching() {
+    document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===4));
+    const mount = document.getElementById('tabContent');
+    if (window.CoachingChart) {
+      CoachingChart.mount(this.memberId, mount);
+    } else {
+      mount.innerHTML = '<div class="empty-state">CoachingChart 모듈이 로드되지 않았습니다</div>';
+    }
   },
 });

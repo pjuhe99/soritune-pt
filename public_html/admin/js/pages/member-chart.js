@@ -68,6 +68,7 @@ App.registerPage('member-chart', {
         <button class="tab-btn" data-tab="coach-history" onclick="App.pages['member-chart'].switchTab('coach-history')">코치이력</button>
         <button class="tab-btn" data-tab="tests" onclick="App.pages['member-chart'].switchTab('tests')">테스트결과</button>
         <button class="tab-btn" data-tab="notes" onclick="App.pages['member-chart'].switchTab('notes')">메모</button>
+        <button class="tab-btn" data-tab="coaching" onclick="App.pages['member-chart'].switchTab('coaching')">코칭 로그</button>
         <button class="tab-btn" data-tab="logs" onclick="App.pages['member-chart'].switchTab('logs')">변경로그</button>
         <button class="tab-btn" data-tab="merge-info" onclick="App.pages['member-chart'].switchTab('merge-info')">병합정보</button>
       </div>
@@ -88,6 +89,7 @@ App.registerPage('member-chart', {
       'coach-history': () => this.loadCoachHistory(),
       'tests': () => this.loadTests(),
       'notes': () => this.loadNotes(),
+      'coaching': () => this.loadCoaching(),
       'logs': () => this.loadLogs(),
       'merge-info': () => this.loadMergeInfo(),
     };
@@ -588,6 +590,15 @@ App.registerPage('member-chart', {
     if (!UI.confirm('이 메모를 삭제하시겠습니까?')) return;
     const res = await API.post(`/api/notes.php?action=delete&id=${id}`);
     if (res.ok) this.switchTab('notes'); else alert(res.message);
+  },
+
+  loadCoaching() {
+    const mount = document.getElementById('tabContent');
+    if (window.CoachingChart) {
+      CoachingChart.mount(this.memberId, mount);
+    } else {
+      mount.innerHTML = '<div class="empty-state">CoachingChart 모듈이 로드되지 않았습니다</div>';
+    }
   },
 
   ACTION_LABELS: {
