@@ -6,6 +6,7 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/helpers.php';
 require_once __DIR__ . '/../includes/tests/sensory_meta.php';
 require_once __DIR__ . '/../includes/tests/disc_meta.php';
+require_once __DIR__ . '/../includes/tests/voice_intake_meta.php';
 
 /**
  * Submit 본 로직 — 세션·HTTP 우회해서 단위테스트 가능하도록 분리.
@@ -19,8 +20,8 @@ require_once __DIR__ . '/../includes/tests/disc_meta.php';
 function memberTestsSubmitImpl(PDO $db, array $user, array $input): array
 {
     $testType = $input['test_type'] ?? '';
-    if (!in_array($testType, ['sensory', 'disc'], true)) {
-        throw new InvalidArgumentException("test_type must be 'sensory' or 'disc'");
+    if (!in_array($testType, ['sensory', 'disc', 'voice_intake'], true)) {
+        throw new InvalidArgumentException("test_type must be 'sensory', 'disc', or 'voice_intake'");
     }
 
     $answers = $input['answers'] ?? null;
@@ -32,7 +33,7 @@ function memberTestsSubmitImpl(PDO $db, array $user, array $input): array
         // Flat int[] of length 48
         $answers = array_map(static fn($a) => is_int($a) ? $a : (is_numeric($a) ? (int)$a : -1), $answers);
         $resultData = Sensory::score($answers);
-    } else {
+    } elseif ($testType === 'disc') {
         // disc: int[][] — 10 inner arrays of 4 ints
         $coerced = [];
         foreach ($answers as $inner) {
@@ -46,6 +47,9 @@ function memberTestsSubmitImpl(PDO $db, array $user, array $input): array
             );
         }
         $resultData = Disc::score($coerced);
+    } else {
+        // voice_intake — 채점 없음, 검증만
+        $resultData = VoiceIntake::validate($answers);
     }
 
     $stmt = $db->prepare(
@@ -72,8 +76,8 @@ function memberTestsSubmitImpl(PDO $db, array $user, array $input): array
  */
 function memberTestsLatestImpl(PDO $db, array $user, string $testType): array
 {
-    if (!in_array($testType, ['sensory', 'disc'], true)) {
-        throw new InvalidArgumentException("test_type must be sensory|disc");
+    if (!in_array($testType, ['sensory', 'disc', 'voice_intake'], true)) {
+        throw new InvalidArgumentException("test_type must be sensory|disc|voice_intake");
     }
     $stmt = $db->prepare(
         "SELECT id, member_id, test_type, result_data, tested_at, memo, created_at

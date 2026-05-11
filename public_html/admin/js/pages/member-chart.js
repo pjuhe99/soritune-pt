@@ -373,6 +373,7 @@ App.registerPage('member-chart', {
 
     const discResults = results.filter(r => r.test_type === 'disc');
     const sensoryResults = results.filter(r => r.test_type === 'sensory');
+    const voiceResults = results.filter(r => r.test_type === 'voice_intake');
 
     document.getElementById('tabContent').innerHTML = `
       <div style="margin-bottom:12px;text-align:right">
@@ -408,6 +409,21 @@ App.registerPage('member-chart', {
           </div>
         `).join('')
       }
+      <h3 style="font-size:14px;font-weight:700;margin:20px 0 12px">음성 케어 매칭 사전 질문</h3>
+      ${voiceResults.length === 0 ? '<div style="color:var(--text-secondary)">결과 없음</div>' :
+        voiceResults.map(r => `
+          <div class="card" style="margin-bottom:8px;padding:12px;background:var(--surface-card)">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+              <div style="flex:1;min-width:0">
+                <span style="font-size:12px;color:var(--text-secondary)">${UI.esc(r.tested_at)}</span>
+                <div style="margin-top:8px">${this.formatTestResult(r.test_type, r.result_data)}</div>
+                ${r.memo ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">${UI.esc(r.memo)}</div>` : ''}
+              </div>
+              <button class="btn btn-small btn-outline" onclick="App.pages['member-chart'].deleteTest(${r.id})">삭제</button>
+            </div>
+          </div>
+        `).join('')
+      }
     `;
   },
 
@@ -416,8 +432,9 @@ App.registerPage('member-chart', {
     try { parsed = typeof data === 'string' ? JSON.parse(data) : data; } catch { return UI.esc(String(data || '-')); }
     if (!parsed || typeof parsed !== 'object') return UI.esc(String(parsed || '-'));
 
-    const isNewSensory = testType === 'sensory' && parsed.version === 1 && parsed.percents;
-    const isNewDisc    = testType === 'disc'    && parsed.version === 1 && parsed.scores && parsed.primary;
+    const isNewSensory     = testType === 'sensory'      && parsed.version === 1 && parsed.percents;
+    const isNewDisc        = testType === 'disc'         && parsed.version === 1 && parsed.scores && parsed.primary;
+    const isNewVoiceIntake = testType === 'voice_intake' && parsed.version === 1 && parsed.answers;
 
     if (isNewSensory) {
       const p = parsed.percents;
@@ -439,9 +456,52 @@ App.registerPage('member-chart', {
       `;
     }
 
+    if (isNewVoiceIntake) {
+      return this.formatVoiceIntakeRows(parsed.answers);
+    }
+
     // Legacy fallback
     if (Array.isArray(parsed)) return UI.esc(parsed.join(', '));
     return UI.esc(Object.entries(parsed).map(([k,v]) => `${k}: ${v}`).join(' | '));
+  },
+
+  formatVoiceIntakeRows(answers) {
+    const meta = [
+      ['q1','성별'],
+      ['q2','연령대'],
+      ['q3','거주지역'],
+      ['q4','학습 목표'],
+      ['q5','하루 투자 시간'],
+      ['q6','훈련 시간대'],
+      ['q7','지속 어려움'],
+      ['q8','코칭 도움'],
+      ['q9','코치 스타일'],
+      ['q10','해당 사항'],
+      ['q11','자기개방 편안함'],
+    ];
+    const rows = meta.map(([id, label]) => {
+      const a = (answers && answers[id]) || {};
+      let ansHtml;
+      if (Array.isArray(a.values)) {
+        ansHtml = a.values.map(v => UI.esc(v)).join('<br>');
+      } else if (typeof a.value === 'string') {
+        if (a.value === '기타' && typeof a.other === 'string' && a.other) {
+          ansHtml = UI.esc(a.other);
+        } else {
+          ansHtml = UI.esc(a.value || '-');
+        }
+      } else {
+        ansHtml = '-';
+      }
+      const qNum = id.toUpperCase();
+      return `
+        <tr>
+          <td style="padding:4px 8px 4px 0;color:var(--text-secondary);font-size:12px;white-space:nowrap;vertical-align:top">${qNum}. ${UI.esc(label)}</td>
+          <td style="padding:4px 0;font-size:13px;line-height:1.6">${ansHtml}</td>
+        </tr>
+      `;
+    }).join('');
+    return `<table style="width:100%;border-collapse:collapse">${rows}</table>`;
   },
 
   async showTestForm() {

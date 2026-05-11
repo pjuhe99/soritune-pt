@@ -35,6 +35,8 @@ window.__BOOT__ = { isLoggedIn: <?= $isLoggedIn ? 'true' : 'false' ?> };
 <script src="/me/js/disc-runner.js"></script>
 <script src="/me/js/disc.js"></script>
 <script src="/me/js/disc-result-view.js"></script>
+<script src="/me/js/voice-intake-data.js"></script>
+<script src="/me/js/voice-intake-runner.js"></script>
 <script>MeApp.init();</script>
 </body>
 </html>

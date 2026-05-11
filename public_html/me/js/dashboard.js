@@ -18,14 +18,16 @@ const MeDashboard = {
   },
 
   async loadCards() {
-    const [sensory, disc] = await Promise.all([
+    const [sensory, disc, voice] = await Promise.all([
       MeAPI.get('/api/member_tests.php?action=latest&test_type=sensory'),
       MeAPI.get('/api/member_tests.php?action=latest&test_type=disc'),
+      MeAPI.get('/api/member_tests.php?action=latest&test_type=voice_intake'),
     ]);
     const cards = document.getElementById('meCards');
     cards.innerHTML = `
       ${this.renderSensoryCard(sensory.ok ? sensory.data.result : null)}
       ${this.renderDiscCard(disc.ok ? disc.data.result : null)}
+      ${this.renderVoiceIntakeCard(voice.ok ? voice.data.result : null)}
     `;
     this.bindCards();
   },
@@ -84,6 +86,32 @@ const MeDashboard = {
     `;
   },
 
+  renderVoiceIntakeCard(latest) {
+    if (latest) {
+      return `
+        <div class="me-card">
+          <div class="me-card-title">음성 케어 매칭 사전 질문</div>
+          <div class="me-card-meta">최근 응답: ${MeUI.esc(MeUI.formatDate(latest.tested_at))}</div>
+          <div class="me-card-result">응답 완료</div>
+          <div class="me-card-actions">
+            <button class="me-btn me-btn-primary" data-action="view-voice">내 응답 보기</button>
+            <button class="me-btn me-btn-outline" data-action="retake-voice">다시 응답하기</button>
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <div class="me-card">
+        <div class="me-card-title">음성 케어 매칭 사전 질문</div>
+        <div class="me-card-meta">미응답</div>
+        <div class="me-card-desc">11문항으로 코치 매칭에 필요한 정보를 수집합니다 (5분 소요)</div>
+        <div class="me-card-actions">
+          <button class="me-btn me-btn-primary" data-action="start-voice">응답하기</button>
+        </div>
+      </div>
+    `;
+  },
+
   bindCards() {
     document.querySelectorAll('[data-action]').forEach(btn => {
       btn.onclick = async () => {
@@ -101,6 +129,13 @@ const MeDashboard = {
           const res = await MeAPI.get('/api/member_tests.php?action=latest&test_type=disc');
           if (res.ok && res.data.result) {
             MeApp.go('result', { testType: 'disc', resultData: res.data.result.result_data });
+          }
+        } else if (action === 'start-voice' || action === 'retake-voice') {
+          MeApp.go('test', { testType: 'voice_intake' });
+        } else if (action === 'view-voice') {
+          const res = await MeAPI.get('/api/member_tests.php?action=latest&test_type=voice_intake');
+          if (res.ok && res.data.result) {
+            MeApp.go('result', { testType: 'voice_intake', resultData: res.data.result.result_data });
           }
         }
       };
