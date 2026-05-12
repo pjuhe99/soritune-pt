@@ -67,9 +67,9 @@ class CoachingLogMigration {
     }
 
     private static function _match(array $r, PDO $pdo): array {
-        $sid = $r['soritune_id'] ?? '';
-        $cm  = $r['cohort_month'] ?? '';
-        $pn  = $r['product_name'] ?? '';
+        $sid = trim((string)($r['soritune_id'] ?? ''));
+        $cm  = trim((string)($r['cohort_month'] ?? ''));
+        $pn  = trim((string)($r['product_name'] ?? ''));
         if (!$sid || !$cm || !$pn) return ['status'=>'date_invalid','order_id'=>null,'error'=>'필수 키 누락'];
 
         $stmt = $pdo->prepare("SELECT id FROM members WHERE soritune_id=?");

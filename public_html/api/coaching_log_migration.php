@@ -30,9 +30,14 @@ try {
             // UTF-8 BOM strip + trim on every header column
             $headers = array_map(fn($h) => trim((string)$h, "\xEF\xBB\xBF "), $headers);
             $headerCount = count($headers);
+            if (count(array_unique($headers)) !== $headerCount) {
+                fclose($fp);
+                jsonError('헤더 중복: ' . implode(', ', $headers), 400);
+            }
 
             $rows = [];
             while (($row = fgetcsv($fp, 0)) !== false) {
+                if (count(array_filter($row, fn($v) => $v !== null && $v !== '')) === 0) continue;
                 // Pad short rows, slice long rows so array_combine never throws on column-count mismatch.
                 $row = array_slice(array_pad($row, $headerCount, ''), 0, $headerCount);
                 $rows[] = array_combine($headers, $row);
