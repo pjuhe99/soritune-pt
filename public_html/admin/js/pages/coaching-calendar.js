@@ -84,6 +84,20 @@ App.registerPage('coaching-calendar', {
       ? '신규 캘린더'
       : `${UI.esc(cal.cohort_month)} / ${UI.esc(cal.product_name)}`;
 
+    // 캘린더 위젯 상태
+    this._selectedDates = new Set(dates);  // Set<YYYY-MM-DD>
+    const firstDate = dates[0];
+    const cohortMonth = isNew ? '' : cal.cohort_month;  // 예: '2026-05'
+    const initMonthStr = firstDate
+      ? firstDate.slice(0, 7)
+      : (cohortMonth && /^\d{4}-\d{2}$/.test(cohortMonth)
+          ? cohortMonth
+          : new Date().toISOString().slice(0, 7));
+    this._viewMonth = {
+      year:  parseInt(initMonthStr.slice(0, 4), 10),
+      month: parseInt(initMonthStr.slice(5, 7), 10),  // 1-12
+    };
+
     UI.showModal(`
       <div class="modal-title">${title}</div>
       <form id="calForm">
@@ -129,16 +143,20 @@ App.registerPage('coaching-calendar', {
                     onclick="App.pages['coaching-calendar'].generatePreview()">후보 생성</button>
           </div>
           <div style="color:var(--text-secondary);font-size:12px;margin-top:4px">
-            시작일 + 회차 수 + 패턴으로 예정일 후보를 생성합니다. 아래 textarea 에서 수정 가능.
+            시작일 + 회차 수 + 패턴으로 예정일 후보를 생성합니다. 아래 캘린더에서 클릭으로 추가/해제.
           </div>
         </div>
 
         <div class="form-group">
-          <label class="form-label">예정일 (한 줄에 하나, YYYY-MM-DD)</label>
-          <textarea class="form-textarea" id="cal-dates" rows="10"
-                    placeholder="2026-05-01&#10;2026-05-02&#10;...">${dates.join('\n')}</textarea>
+          <label class="form-label">예정일 (캘린더에서 클릭으로 선택)</label>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap">
+            <button type="button" class="btn btn-secondary btn-small"
+                    onclick="App.pages['coaching-calendar']._clearAll()">전체 해제</button>
+            <span id="cal-badge" style="font-size:13px;padding:2px 10px;border-radius:9999px"></span>
+          </div>
+          <div id="cal-grid-container" style="background:#181818;border-radius:8px;padding:12px"></div>
           <div style="color:var(--text-secondary);font-size:12px;margin-top:4px">
-            한 줄에 하나. 회차 수와 일치해야 함. 비워두면 dates 변경 없이 저장.
+            회차 수와 선택 수가 일치해야 저장됩니다. 과거 날짜도 클릭 가능 (회색 표시).
           </div>
         </div>
 
