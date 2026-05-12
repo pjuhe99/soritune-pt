@@ -21,7 +21,7 @@ try {
     if (!$member) jsonError('회원을 찾을 수 없습니다', 404);
 
     $orders = $pdo->prepare("
-        SELECT o.*, c.name AS coach_name
+        SELECT o.*, c.coach_name
         FROM orders o LEFT JOIN coaches c ON c.id = o.coach_id
         WHERE o.member_id = :m
         ORDER BY o.start_date DESC
