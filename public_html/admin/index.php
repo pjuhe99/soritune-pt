@@ -77,6 +77,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
       <a href="#retention" data-page="retention">리텐션관리</a>
       <a href="#matching" data-page="matching">매칭관리</a>
       <a href="#coaching-calendar" data-page="coaching-calendar">매칭 캘린더</a>
+      <a href="#coaching-log-migration" data-page="coaching-log-migration">코칭 로그 마이그</a>
       <a href="#notify" data-page="notify">알림톡</a>
       <a href="#kakao-check" data-page="kakao-check">카톡방 입장 체크</a>
       <a href="#training-attendance" data-page="training-attendance">코치 교육 출석</a>
@@ -104,6 +105,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 <script src="/admin/js/pages/retention.js"></script>
 <script src="/admin/js/pages/matching.js"></script>
 <script src="/admin/js/pages/coaching-calendar.js?v=20260511"></script>
+<script src="/admin/js/pages/coaching-log-migration.js?v=20260511"></script>
 <script src="/admin/js/pages/notify.js"></script>
 <script src="/admin/js/pages/kakao-check.js"></script>
 <script src="/admin/js/pages/training-attendance.js"></script>
