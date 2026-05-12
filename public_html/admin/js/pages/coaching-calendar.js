@@ -101,6 +101,7 @@ App.registerPage('coaching-calendar', {
     };
     // NOTE: generatePreview()/save() 가 `cal-dates` 를 참조하던 부분은 Task 4/5 에서 _setSelection / set 직렬화로 교체됨.
     // 이 task 단독으로는 "후보 생성"·"저장" 버튼이 에러를 발생시키므로 Task 5 이전까지 미사용.
+    // 셀의 _toggleDate / 헤더 화살표의 _navigateMonth onclick 참조는 Task 3 까지 의도적으로 orphan.
 
     UI.showModal(`
       <div class="modal-title">${title}</div>
@@ -173,10 +174,121 @@ App.registerPage('coaching-calendar', {
       </form>
     `);
 
+    this._renderCalendar();
     document.getElementById('calForm').addEventListener('submit', e => {
       e.preventDefault();
       this.save(isNew ? null : cal.id);
     });
+  },
+
+  /**
+   * 주어진 year/month(1-12)의 7×6 그리드 cell 배열 반환.
+   * 첫 주는 sunday-start. 다른 달 spillover는 inMonth=false.
+   * @returns {Array<{date:string, inMonth:boolean, isToday:boolean, isPast:boolean}>}
+   */
+  _buildMonthGrid(year, month) {
+    const firstOfMonth = new Date(year, month - 1, 1);
+    const startWeekday = firstOfMonth.getDay();  // 0=Sun
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+    const cells = [];
+    // 앞쪽 spillover
+    const prevMonthLast = new Date(year, month - 1, 0).getDate();
+    for (let i = startWeekday - 1; i >= 0; i--) {
+      const d = prevMonthLast - i;
+      const pm = month === 1 ? 12 : month - 1;
+      const py = month === 1 ? year - 1 : year;
+      const ds = `${py}-${String(pm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      cells.push({date: ds, inMonth: false, isToday: ds === todayStr, isPast: ds < todayStr});
+    }
+    // 이번 달
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ds = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      cells.push({date: ds, inMonth: true, isToday: ds === todayStr, isPast: ds < todayStr});
+    }
+    // 뒤쪽 spillover (42 칸 채움)
+    let nextD = 1;
+    while (cells.length < 42) {
+      const nm = month === 12 ? 1 : month + 1;
+      const ny = month === 12 ? year + 1 : year;
+      const ds = `${ny}-${String(nm).padStart(2,'0')}-${String(nextD).padStart(2,'0')}`;
+      cells.push({date: ds, inMonth: false, isToday: ds === todayStr, isPast: ds < todayStr});
+      nextD++;
+    }
+    return cells;
+  },
+
+  /**
+   * `_viewMonth` 기준으로 그리드 HTML을 #cal-grid-container 에 렌더.
+   * 선택 상태는 `_selectedDates`. 셀 onclick 핸들러 `_toggleDate` 는 Task 3에서 정의.
+   */
+  _renderCalendar() {
+    const {year, month} = this._viewMonth;
+    const cells = this._buildMonthGrid(year, month);
+    const weekdays = ['일','월','화','수','목','금','토'];
+
+    const headerHtml = `
+      <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px">
+        <button type="button" class="btn btn-secondary btn-small"
+                onclick="App.pages['coaching-calendar']._navigateMonth(-1)"
+                aria-label="이전 달">←</button>
+        <div style="font-size:15px;font-weight:700;color:#fff;min-width:120px;text-align:center">
+          ${year}년 ${month}월
+        </div>
+        <button type="button" class="btn btn-secondary btn-small"
+                onclick="App.pages['coaching-calendar']._navigateMonth(1)"
+                aria-label="다음 달">→</button>
+      </div>
+    `;
+
+    const weekdayHtml = `
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">
+        ${weekdays.map(w => `
+          <div style="text-align:center;font-size:11px;color:#b3b3b3;padding:4px 0">${w}</div>
+        `).join('')}
+      </div>
+    `;
+
+    const cellsHtml = `
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">
+        ${cells.map(c => this._renderCell(c)).join('')}
+      </div>
+    `;
+
+    document.getElementById('cal-grid-container').innerHTML =
+      headerHtml + weekdayHtml + cellsHtml;
+  },
+
+  /**
+   * 단일 셀 HTML. PT 디자인 시스템 따라 inline 스타일.
+   * 상태: 선택(orange), 오늘(outline), 과거(muted), spillover(disabled), hover(lighten)
+   * `data-selected="true"` 마커로 hover override 가 선택 셀에서는 작동하지 않도록 함 (plan 의 "concern" 결정 B).
+   */
+  _renderCell(c) {
+    if (!c.inMonth) {
+      return `<div style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+                          color:#4d4d4d;font-size:13px;cursor:default">${parseInt(c.date.slice(8),10)}</div>`;
+    }
+    const isSelected = this._selectedDates.has(c.date);
+    const day = parseInt(c.date.slice(8), 10);
+    const bg = isSelected ? '#FF5E00' : 'transparent';
+    const color = isSelected ? '#fff' : (c.isPast ? '#7c7c7c' : '#fff');
+    const outline = c.isToday ? 'outline:2px solid #FF5E00;outline-offset:-2px;' : '';
+    const selectedAttr = isSelected ? 'data-selected="true"' : '';
+    return `
+      <div data-date="${c.date}" ${selectedAttr}
+           onclick="App.pages['coaching-calendar']._toggleDate('${c.date}')"
+           style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+                  background:${bg};color:${color};font-size:13px;font-weight:${isSelected?700:400};
+                  border-radius:6px;cursor:pointer;${outline}
+                  transition:background 0.1s"
+           onmouseover="if (!this.dataset.selected) this.style.background='#272727'"
+           onmouseout="this.style.background='${bg}'">
+        ${day}
+      </div>
+    `;
   },
 
   async generatePreview() {
