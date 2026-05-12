@@ -294,8 +294,8 @@ App.registerPage('coaching-calendar', {
   },
 
   /**
-   * 셀 클릭 시 선택 set 토글. 해당 셀만 다시 그리고 배지 갱신.
-   * (전체 그리드 재렌더 안 함 — 빈번한 클릭 대비 가벼움 유지)
+   * 셀 클릭 시 선택 set 토글 후 전체 그리드 재렌더 + 배지 갱신.
+   * 42 셀 + inline onclick 이라 surgical 갱신 대신 통째 재렌더가 cheap 하고 일관적.
    */
   _toggleDate(dateStr) {
     if (this._selectedDates.has(dateStr)) {
