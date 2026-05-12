@@ -1461,3 +1461,126 @@ input, select, textarea {
   background: #FF5E00;
   color: #fff;
 }
+
+/* ─────────── 회원 차트 - 코칭 영역 (coaching-chart.js) ─────────── */
+.coaching-chart { margin-top: 8px; }
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.metric-card {
+  background: var(--surface-card);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.metric-label {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  letter-spacing: 0.2px;
+}
+.metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+.metric-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.order-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+.order-card h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.order-card h3 .muted {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+.order-card h3 .status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(255, 94, 0, 0.15);
+  color: var(--accent);
+  letter-spacing: 0.2px;
+}
+.order-card > .btn {
+  margin-top: 12px;
+}
+
+.session-table {
+  width: 100%;
+  margin: 8px 0 0;
+}
+.session-table th,
+.session-table td {
+  font-size: 13px;
+  vertical-align: top;
+  padding: 8px 10px;
+}
+.session-table th {
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.session-row td.cell-text {
+  max-width: 200px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+}
+.session-table td.empty {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 16px 8px;
+  font-size: 13px;
+}
+
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 8px 0;
+  background: var(--surface-card);
+  border-radius: 6px;
+}
+.bulk-bar .selected-count {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.row-check {
+  cursor: pointer;
+}
+
+/* btn-sm — coaching-chart.js 에서 사용. 기존 btn-small 과 별칭. */
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+}
