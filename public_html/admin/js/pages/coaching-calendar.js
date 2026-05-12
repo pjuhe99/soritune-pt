@@ -175,6 +175,8 @@ App.registerPage('coaching-calendar', {
     `);
 
     this._renderCalendar();
+    this._updateBadge();
+    document.getElementById('cal-count').addEventListener('input', () => this._updateBadge());
     document.getElementById('calForm').addEventListener('submit', e => {
       e.preventDefault();
       this.save(isNew ? null : cal.id);
@@ -289,6 +291,58 @@ App.registerPage('coaching-calendar', {
         ${day}
       </div>
     `;
+  },
+
+  /**
+   * 셀 클릭 시 선택 set 토글. 해당 셀만 다시 그리고 배지 갱신.
+   * (전체 그리드 재렌더 안 함 — 빈번한 클릭 대비 가벼움 유지)
+   */
+  _toggleDate(dateStr) {
+    if (this._selectedDates.has(dateStr)) {
+      this._selectedDates.delete(dateStr);
+    } else {
+      this._selectedDates.add(dateStr);
+    }
+    // 빠른 갱신: 전체 그리드 재렌더 (셀 ~42개 + onclick 핸들러 inline 이라 cheap).
+    this._renderCalendar();
+    this._updateBadge();
+  },
+
+  /**
+   * 화살표 클릭 시 viewMonth 만 변경. selectedDates 는 유지.
+   */
+  _navigateMonth(delta) {
+    let {year, month} = this._viewMonth;
+    month += delta;
+    if (month < 1) { month = 12; year--; }
+    else if (month > 12) { month = 1; year++; }
+    this._viewMonth = {year, month};
+    this._renderCalendar();
+  },
+
+  /**
+   * 회차 수 (cal-count input) 와 선택 수를 비교해 배지 갱신.
+   * 일치 = 초록, 불일치 = 빨강.
+   */
+  _updateBadge() {
+    const badge = document.getElementById('cal-badge');
+    if (!badge) return;
+    const countInput = document.getElementById('cal-count');
+    const count = countInput ? parseInt(countInput.value, 10) || 0 : 0;
+    const selected = this._selectedDates.size;
+    const match = count === selected;
+    badge.textContent = `회차 ${count} / 선택 ${selected}`;
+    badge.style.background = match ? 'rgba(30,215,96,0.15)' : 'rgba(243,114,127,0.15)';
+    badge.style.color      = match ? '#1ed760'              : '#f3727f';
+  },
+
+  /**
+   * 전체 선택 해제. view 는 유지.
+   */
+  _clearAll() {
+    this._selectedDates.clear();
+    this._renderCalendar();
+    this._updateBadge();
   },
 
   async generatePreview() {
