@@ -99,8 +99,8 @@ App.registerPage('coaching-calendar', {
       year:  parseInt(initMonthStr.slice(0, 4), 10),
       month: parseInt(initMonthStr.slice(5, 7), 10),  // 1-12
     };
-    // NOTE: generatePreview()/save() 가 `cal-dates` 를 참조하던 부분은 Task 4/5 에서 _setSelection / set 직렬화로 교체됨.
-    // 이 task 단독으로는 "후보 생성"·"저장" 버튼이 에러를 발생시키므로 Task 5 이전까지 미사용.
+    // NOTE: save() 가 `cal-dates` 를 참조하던 부분은 Task 5 에서 set 직렬화로 교체됨.
+    // 이 task 시점에는 "저장" 버튼이 에러를 발생시키므로 Task 5 이전까지 미사용.
     // 셀의 _toggleDate / 헤더 화살표의 _navigateMonth onclick 참조는 Task 3 까지 의도적으로 orphan.
 
     UI.showModal(`
@@ -345,6 +345,23 @@ App.registerPage('coaching-calendar', {
     this._updateBadge();
   },
 
+  /**
+   * datesArray로 _selectedDates 를 replace. view 를 첫 날짜의 달로 이동.
+   * 자동 패턴 결과 적용 시 호출.
+   */
+  _setSelection(datesArray) {
+    this._selectedDates = new Set(datesArray);
+    if (datesArray.length > 0) {
+      const first = datesArray[0];
+      this._viewMonth = {
+        year:  parseInt(first.slice(0, 4), 10),
+        month: parseInt(first.slice(5, 7), 10),
+      };
+    }
+    this._renderCalendar();
+    this._updateBadge();
+  },
+
   async generatePreview() {
     const start = document.getElementById('cal-start').value;
     const count = parseInt(document.getElementById('cal-count').value, 10);
@@ -357,7 +374,7 @@ App.registerPage('coaching-calendar', {
       start, count, pattern,
     });
     if (!res.ok) { alert(res.message); return; }
-    document.getElementById('cal-dates').value = res.data.dates.join('\n');
+    this._setSelection(res.data.dates);
   },
 
   async save(id) {
