@@ -88,15 +88,19 @@ App.registerPage('coaching-calendar', {
     this._selectedDates = new Set(dates);  // Set<YYYY-MM-DD>
     const firstDate = dates[0];
     const cohortMonth = isNew ? '' : cal.cohort_month;  // 예: '2026-05'
+    const now = new Date();
+    const todayMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
     const initMonthStr = firstDate
       ? firstDate.slice(0, 7)
       : (cohortMonth && /^\d{4}-\d{2}$/.test(cohortMonth)
           ? cohortMonth
-          : new Date().toISOString().slice(0, 7));
+          : todayMonth);
     this._viewMonth = {
       year:  parseInt(initMonthStr.slice(0, 4), 10),
       month: parseInt(initMonthStr.slice(5, 7), 10),  // 1-12
     };
+    // NOTE: generatePreview()/save() 가 `cal-dates` 를 참조하던 부분은 Task 4/5 에서 _setSelection / set 직렬화로 교체됨.
+    // 이 task 단독으로는 "후보 생성"·"저장" 버튼이 에러를 발생시키므로 Task 5 이전까지 미사용.
 
     UI.showModal(`
       <div class="modal-title">${title}</div>
@@ -154,7 +158,7 @@ App.registerPage('coaching-calendar', {
                     onclick="App.pages['coaching-calendar']._clearAll()">전체 해제</button>
             <span id="cal-badge" style="font-size:13px;padding:2px 10px;border-radius:9999px"></span>
           </div>
-          <div id="cal-grid-container" style="background:#181818;border-radius:8px;padding:12px"></div>
+          <div id="cal-grid-container" style="background:var(--surface-card);border-radius:8px;padding:12px"></div>
           <div style="color:var(--text-secondary);font-size:12px;margin-top:4px">
             회차 수와 선택 수가 일치해야 저장됩니다. 과거 날짜도 클릭 가능 (회색 표시).
           </div>
