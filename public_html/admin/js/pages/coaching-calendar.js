@@ -4,7 +4,7 @@
  * 매칭월/상품 단위로 PT 회차 예정일을 관리한다.
  * - 신규 생성: cohort_month + product_name + session_count + dates 입력
  * - 수정: session_count + notes + dates 만 변경 가능 (cohort_month/product_name 은 immutable)
- * - 자동 패턴 미리보기로 dates 후보 생성 후 textarea 에서 수정 가능
+ * - 예정일은 클릭형 캘린더로 선택. 자동 패턴 버튼은 후보를 캘린더에 pre-select.
  * - 삭제: order_sessions.calendar_id 가 NULL 로 끊김 (ON DELETE SET NULL)
  */
 App.registerPage('coaching-calendar', {
@@ -99,9 +99,6 @@ App.registerPage('coaching-calendar', {
       year:  parseInt(initMonthStr.slice(0, 4), 10),
       month: parseInt(initMonthStr.slice(5, 7), 10),  // 1-12
     };
-    // NOTE: save() 가 `cal-dates` 를 참조하던 부분은 Task 5 에서 set 직렬화로 교체됨.
-    // 이 task 시점에는 "저장" 버튼이 에러를 발생시키므로 Task 5 이전까지 미사용.
-    // 셀의 _toggleDate / 헤더 화살표의 _navigateMonth onclick 참조는 Task 3 까지 의도적으로 orphan.
 
     UI.showModal(`
       <div class="modal-title">${title}</div>
@@ -381,31 +378,23 @@ App.registerPage('coaching-calendar', {
     const isNew = !id;
     const count = parseInt(document.getElementById('cal-count').value, 10);
     const notes = document.getElementById('cal-notes').value.trim();
-    const datesRaw = document.getElementById('cal-dates').value;
-    const dates = datesRaw.split('\n').map(s => s.trim()).filter(Boolean);
+    const dates = Array.from(this._selectedDates).sort();
 
     if (!count || count <= 0) {
       alert('회차 수는 1 이상이어야 합니다');
       return;
     }
 
-    // 신규는 dates 가 반드시 회차 수와 일치해야 함.
-    // 수정은 dates 비어있으면 변경 안 함 (서버에서 isset 체크), 입력했으면 일치 검증.
-    if (isNew) {
-      if (dates.length !== count) {
-        alert(`회차 수(${count})와 예정일 개수(${dates.length}) 불일치`);
-        return;
-      }
-    } else if (dates.length > 0 && dates.length !== count) {
-      alert(`회차 수(${count})와 예정일 개수(${dates.length}) 불일치. 비워두면 dates 변경 없이 저장됩니다.`);
+    if (dates.length !== count) {
+      alert(`회차 수(${count})와 선택 수(${dates.length})가 일치해야 합니다`);
       return;
     }
 
     const body = {
       session_count: count,
       notes: notes || null,
+      dates: dates,
     };
-    if (dates.length > 0) body.dates = dates;
 
     let url;
     if (isNew) {
