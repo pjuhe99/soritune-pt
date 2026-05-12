@@ -9,6 +9,7 @@
  */
 App.registerPage('coaching-calendar', {
   calendars: [],
+  products: [],  // orders.product_name DISTINCT — 신규 캘린더 모달 드롭다운용 캐시
 
   async render() {
     document.getElementById('pageContent').innerHTML = `
@@ -18,7 +19,12 @@ App.registerPage('coaching-calendar', {
       </div>
       <div id="calendarList"><div class="loading">불러오는 중...</div></div>
     `;
-    await this.loadList();
+    await Promise.all([this.loadList(), this.loadProducts()]);
+  },
+
+  async loadProducts() {
+    const res = await API.get('/api/coaching_calendar.php?action=product_names');
+    this.products = res.ok ? (res.data.products || []) : [];
   },
 
   async loadList() {
@@ -113,10 +119,16 @@ App.registerPage('coaching-calendar', {
           </div>
           <div class="form-group">
             <label class="form-label">상품명</label>
-            <input class="form-input" id="cal-product"
-                   value="${isNew ? '' : UI.esc(cal.product_name)}"
-                   ${isNew ? '' : 'disabled style="opacity:0.5"'}
-                   placeholder="음성PT" required>
+            ${isNew ? `
+              <select class="form-select" id="cal-product" required>
+                <option value="">선택...</option>
+                ${this.products.map(p => `<option value="${UI.esc(p)}">${UI.esc(p)}</option>`).join('')}
+              </select>
+            ` : `
+              <input class="form-input" id="cal-product"
+                     value="${UI.esc(cal.product_name)}"
+                     disabled style="opacity:0.5">
+            `}
           </div>
           <div class="form-group">
             <label class="form-label">회차 수</label>

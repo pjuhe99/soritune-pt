@@ -21,6 +21,16 @@ try {
             jsonSuccess(['calendars' => $rows]);
         }
 
+        case 'product_names': {
+            $rows = $db->query("
+                SELECT DISTINCT product_name
+                FROM orders
+                WHERE product_name IS NOT NULL AND product_name <> ''
+                ORDER BY product_name
+            ")->fetchAll(PDO::FETCH_COLUMN);
+            jsonSuccess(['products' => $rows]);
+        }
+
         case 'get': {
             $id = (int)($_GET['id'] ?? 0);
             if (!$id) jsonError('ID가 필요합니다');
