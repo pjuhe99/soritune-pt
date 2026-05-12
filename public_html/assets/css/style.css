@@ -1227,6 +1227,14 @@ input, select, textarea {
   margin-bottom: 28px;
 }
 
+/* 모든 페이지 콘텐츠 컨테이너 — sticky topbar 아래 균일한 여백 */
+#pageContent {
+  padding: 24px 24px 32px;
+}
+@media (max-width: 768px) {
+  #pageContent { padding: 16px 16px 24px; }
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
