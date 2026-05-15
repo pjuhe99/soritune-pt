@@ -16,7 +16,7 @@ if ($isLoggedIn) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SoriTune PT — Coach</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/assets/css/style.css?v=20260515b">
 <script>
 // DEV 환경 배지 (dev- 서브도메인일 때만 노출)
 if (location.hostname.startsWith('dev-')) {
