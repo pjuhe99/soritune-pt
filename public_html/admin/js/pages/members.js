@@ -69,6 +69,8 @@ App.registerPage('members', {
             <th>담당코치</th>
             <th>상태</th>
             <th>PT건수</th>
+            <th>진도율</th>
+            <th>개선율</th>
             <th></th>
           </tr>
         </thead>
@@ -81,6 +83,8 @@ App.registerPage('members', {
               <td>${UI.esc(m.current_coaches) || '-'}</td>
               <td>${UI.statusBadge(m.display_status)}</td>
               <td>${m.order_count}</td>
+              <td>${m.metrics && m.metrics.total > 0 ? (m.metrics.progress_rate * 100).toFixed(0) + '%' : '-'}</td>
+              <td>${m.metrics && m.metrics.solution_total > 0 ? (m.metrics.improvement_rate * 100).toFixed(0) + '%' : '-'}</td>
               <td><span style="color:var(--text-secondary)">→</span></td>
             </tr>
           `).join('')}

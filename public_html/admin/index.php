@@ -10,8 +10,8 @@ $isLoggedIn = $user && $user['role'] === 'admin';
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SoriTune PT — Admin</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
-<link rel="stylesheet" href="/assets/css/style.css">
-<link rel="stylesheet" href="/assets/css/notify.css">
+<link rel="stylesheet" href="/assets/css/style.css?v=20260515c">
+<link rel="stylesheet" href="/assets/css/notify.css?v=20260515c">
 <script>
 // DEV 환경 배지 (dev- 서브도메인일 때만 노출)
 if (location.hostname.startsWith('dev-')) {
@@ -76,6 +76,8 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
       <a href="#import" data-page="import">데이터관리</a>
       <a href="#retention" data-page="retention">리텐션관리</a>
       <a href="#matching" data-page="matching">매칭관리</a>
+      <a href="#coaching-calendar" data-page="coaching-calendar">매칭 캘린더</a>
+      <a href="#coaching-log-migration" data-page="coaching-log-migration">코칭 로그 마이그</a>
       <a href="#notify" data-page="notify">알림톡</a>
       <a href="#kakao-check" data-page="kakao-check">카톡방 입장 체크</a>
       <a href="#training-attendance" data-page="training-attendance">코치 교육 출석</a>
@@ -94,6 +96,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 </div>
 
 <script src="/admin/js/app.js"></script>
+<script src="/assets/js/coaching-chart.js?v=20260511"></script>
 <script src="/admin/js/pages/coaches.js"></script>
 <script src="/admin/js/pages/members.js"></script>
 <script src="/admin/js/pages/member-chart.js"></script>
@@ -101,6 +104,8 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 <script src="/admin/js/pages/import.js"></script>
 <script src="/admin/js/pages/retention.js"></script>
 <script src="/admin/js/pages/matching.js"></script>
+<script src="/admin/js/pages/coaching-calendar.js?v=20260511"></script>
+<script src="/admin/js/pages/coaching-log-migration.js?v=20260511"></script>
 <script src="/admin/js/pages/notify.js"></script>
 <script src="/admin/js/pages/kakao-check.js"></script>
 <script src="/admin/js/pages/training-attendance.js"></script>

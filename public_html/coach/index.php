@@ -16,7 +16,7 @@ if ($isLoggedIn) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SoriTune PT — Coach</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
-<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/assets/css/style.css?v=20260515c">
 <script>
 // DEV 환경 배지 (dev- 서브도메인일 때만 노출)
 if (location.hostname.startsWith('dev-')) {
@@ -97,6 +97,7 @@ document.getElementById('loginForm').addEventListener('submit', async e => {
 </div>
 
 <script src="/coach/js/app.js"></script>
+<script src="/assets/js/coaching-chart.js?v=20260511"></script>
 <script src="/coach/js/pages/my-members.js"></script>
 <script src="/coach/js/pages/kakao-check.js"></script>
 <script src="/coach/js/pages/member-chart.js"></script>

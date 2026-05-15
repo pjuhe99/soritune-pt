@@ -73,7 +73,7 @@ CoachApp.registerPage('my-members', {
 
     container.innerHTML = `
       <table class="data-table">
-        <thead><tr><th>이름</th><th>전화번호</th><th>진행 중 상품</th><th>상태</th><th>PT건수</th><th></th></tr></thead>
+        <thead><tr><th>이름</th><th>전화번호</th><th>진행 중 상품</th><th>상태</th><th>PT건수</th><th>진도율</th><th>개선율</th><th></th></tr></thead>
         <tbody>
           ${members.map(m => `
             <tr style="cursor:pointer" onclick="location.hash='member-chart/${m.id}'">
@@ -82,6 +82,8 @@ CoachApp.registerPage('my-members', {
               <td style="color:var(--text-secondary)">${UI.esc(m.current_products) || '-'}</td>
               <td>${UI.statusBadge(m.display_status)}</td>
               <td>${m.order_count}</td>
+              <td>${m.metrics && m.metrics.total > 0 ? (m.metrics.progress_rate * 100).toFixed(0) + '%' : '-'}</td>
+              <td>${m.metrics && m.metrics.solution_total > 0 ? (m.metrics.improvement_rate * 100).toFixed(0) + '%' : '-'}</td>
               <td><span style="color:var(--text-secondary)">→</span></td>
             </tr>
           `).join('')}
