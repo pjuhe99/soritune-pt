@@ -10,8 +10,8 @@ $isLoggedIn = $user && ($user['role'] ?? null) === 'member';
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SoriTune PT — 회원</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
-<link rel="stylesheet" href="/assets/css/style.css?v=20260515b">
-<link rel="stylesheet" href="/assets/css/member.css?v=20260515b">
+<link rel="stylesheet" href="/assets/css/style.css?v=20260515c">
+<link rel="stylesheet" href="/assets/css/member.css?v=20260515c">
 <script>
 if (location.hostname.startsWith('dev-')) {
   document.addEventListener('DOMContentLoaded', () => {

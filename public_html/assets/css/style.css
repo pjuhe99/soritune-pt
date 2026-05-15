@@ -235,7 +235,7 @@ input, select, textarea {
   z-index: 90;
   background-color: var(--surface);
   border-bottom: 1px solid var(--border);
-  padding: var(--space-3) clamp(32px, 5vw, 64px);
+  padding: var(--space-3) clamp(28px, 3.5vw, 48px) var(--space-3) clamp(20px, 2.2vw, 28px);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1229,7 +1229,7 @@ input, select, textarea {
 
 /* 모든 페이지 콘텐츠 컨테이너 — sticky topbar 아래 균일한 여백 */
 #pageContent {
-  padding: 32px clamp(32px, 5vw, 64px) 40px;
+  padding: 28px clamp(28px, 3.5vw, 48px) 36px clamp(20px, 2.2vw, 28px);
 }
 @media (max-width: 768px) {
   #pageContent { padding: 20px 16px 24px; }
